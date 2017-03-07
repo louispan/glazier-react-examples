@@ -90,11 +90,7 @@ instance HasGasket GModel where
     gasket = _1
 instance HasModel GModel where
     model = _2
-instance CD.Disposing GModel where
-    disposing s = CD.DisposeList
-        [ s ^. gasket . to CD.disposing
-        , s ^. model . to CD.disposing
-        ]
+instance CD.Disposing GModel
 -- MModel
 instance R.HasMModel MModel GModel where
     mModel = id
@@ -108,12 +104,10 @@ instance HasGasket SuperModel where
 instance HasModel SuperModel where
     model = R.gModel . model
 instance CD.Disposing SuperModel where
-    disposing s = CD.DisposeList
-        [ s ^. gasket . to CD.disposing
-        , s ^. model . to CD.disposing
-        ]
+    disposing s = CD.disposing $ s ^. R.gModel
 -- End same code per widget
 ----------------------------------------------------------
+
 
 -- | This might be different per widget
 instance CD.Disposing Model where
