@@ -10,12 +10,12 @@ module Todo.Input
     ( Command(..)
     , Action(..)
     , AsAction(..)
-    , Callbacks(..)
-    , HasCallbacks(..)
-    , mkCallbacks
+    , Gasket(..)
+    , HasGasket(..)
+    , mkGasket
     , Model(..)
     , HasModel(..)
-    , CModel
+    , GModel
     , MModel
     , SuperModel
     , mkSuperModel
@@ -36,6 +36,7 @@ import qualified GHCJS.Foreign.Callback as J
 import qualified GHCJS.Marshal.Pure as J
 import qualified GHCJS.Types as J
 import qualified Glazier as G
+import qualified Glazier.React.Component as R
 import qualified Glazier.React.Event as R
 import qualified Glazier.React.Maker as R
 import qualified Glazier.React.Markup as R
@@ -57,58 +58,58 @@ data Action
 
 data Model = Model
     -- common widget model
-    { _shim :: J.JSVal
-    , _uid :: J.JSString
+    { _uid :: J.JSString
     -- widget specifc model
     , _placeholder :: J.JSString
     }
 
-data Callbacks = Callbacks
+data Gasket = Gasket
     -- common widget callbacks
-    { _onRender :: J.Callback (J.JSVal -> IO J.JSVal)
+    { _component :: R.ReactComponent
+    , _onRender :: J.Callback (J.JSVal -> IO J.JSVal)
     -- widget specific callbacks
     , _onKeyDown :: J.Callback (J.JSVal -> IO ())
     } deriving (G.Generic)
 
 ----------------------------------------------------------
 -- The following should be the same per widget
--- | Callbacks and pure state
-type CModel = (Callbacks, Model)
+-- | Gasket and pure state
+type GModel = (Gasket, Model)
 -- | Mutable model for rendering callback
-type MModel = MVar CModel
--- | Contains MModel and CModel
-type SuperModel = (MModel, CModel)
+type MModel = MVar GModel
+-- | Contains MModel and GModel
+type SuperModel = (MModel, GModel)
 makeClassyPrisms ''Action
-makeClassy ''Callbacks
+makeClassy ''Gasket
 makeClassy ''Model
-instance CD.Disposing Callbacks
--- CModel
-instance R.HasCModel CModel CModel where
-    cModel = id
-instance HasCallbacks CModel where
-    callbacks = _1
-instance HasModel CModel where
+instance CD.Disposing Gasket
+-- GModel
+instance R.HasGModel GModel GModel where
+    gModel = id
+instance HasGasket GModel where
+    gasket = _1
+instance HasModel GModel where
     model = _2
-instance CD.Disposing CModel where
+instance CD.Disposing GModel where
     disposing s = CD.DisposeList
-        [ s ^. callbacks . to CD.disposing
+        [ s ^. gasket . to CD.disposing
         , s ^. model . to CD.disposing
         ]
 -- MModel
-instance R.HasMModel MModel CModel where
+instance R.HasMModel MModel GModel where
     mModel = id
 -- SuperModel
-instance R.HasMModel SuperModel CModel where
+instance R.HasMModel SuperModel GModel where
     mModel = _1
-instance R.HasCModel SuperModel CModel where
-    cModel = _2
-instance HasCallbacks SuperModel where
-    callbacks = R.cModel . callbacks
+instance R.HasGModel SuperModel GModel where
+    gModel = _2
+instance HasGasket SuperModel where
+    gasket = R.gModel . gasket
 instance HasModel SuperModel where
-    model = R.cModel . model
+    model = R.gModel . model
 instance CD.Disposing SuperModel where
     disposing s = CD.DisposeList
-        [ s ^. callbacks . to CD.disposing
+        [ s ^. gasket . to CD.disposing
         , s ^. model . to CD.disposing
         ]
 -- End same code per widget
@@ -119,28 +120,29 @@ instance CD.Disposing Model where
     disposing _ = CD.DisposeNone
 
 mkSuperModel :: Model -> F (R.Maker Action) SuperModel
-mkSuperModel s = R.mkSuperModel mkCallbacks $ \cbs -> (cbs, s)
+mkSuperModel s = R.mkSuperModel mkGasket $ \cbs -> (cbs, s)
 -- End similar code per widget
 ----------------------------------------------------------
 
-mkCallbacks :: MVar CModel -> F (R.Maker Action) Callbacks
-mkCallbacks ms = Callbacks
+mkGasket :: MVar GModel -> F (R.Maker Action) Gasket
+mkGasket ms = Gasket
     -- common widget callbacks
-    <$> (R.mkRenderer ms $ const render)
+    <$> R.getComponent
+    <*> (R.mkRenderer ms $ const render)
     -- widget specific callbacks
     <*> (R.mkHandler onKeyDown')
 
 -- | This is used by parent components to render this component
-window :: Monad m => G.WindowT CModel (R.ReactMlT m) ()
+window :: Monad m => G.WindowT GModel (R.ReactMlT m) ()
 window = do
     s <- ask
-    lift $ R.lf (s ^. shim)
-        [ ("key",  s ^. uid . to J.jsval)
+    lift $ R.lf (s ^. component . to J.pToJSVal)
+        [ ("key",  s ^. uid . to J.pToJSVal)
         , ("render", s ^. onRender . to JE.PureJSVal . to J.pToJSVal)
         ]
 
 -- | This is used by the React render callback
-render :: Monad m => G.WindowT CModel (R.ReactMlT m) ()
+render :: Monad m => G.WindowT GModel (R.ReactMlT m) ()
 render = do
     s <- ask
     lift $ R.lf (JE.strval "input")

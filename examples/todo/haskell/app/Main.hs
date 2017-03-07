@@ -19,6 +19,7 @@ import qualified Data.JSString as J
 import qualified GHCJS.Marshal.Pure as J
 import qualified GHCJS.Types as J
 import qualified Glazier as G
+import qualified Glazier.React.Component as R
 import qualified Glazier.React.Maker.Run as R.Maker
 import qualified Glazier.React.Markup as R
 import qualified Glazier.React.ReactDOM as RD
@@ -43,15 +44,13 @@ main = do
     -- blocked events are kept by the GHCJCS runtime.
     (output, input) <- liftIO . PC.spawn $ PC.unbounded
 
-    shim <- js_shimComponent
+    component <- R.mkComponent
 
     -- App Model
     let inputModel = TD.Input.Model
-            shim
             "newtodo"
             "What needs to be done?"
         mkAppModel inputSuperModel = TD.App.Model
-            shim
             "todos"
             J.nullRef
             0
@@ -59,17 +58,17 @@ main = do
             0
             inputSuperModel
             mempty
-    s <- liftIO $ iterM (R.Maker.run output) (TD.App.mkSuperModel inputModel mkAppModel)
+    s <- liftIO $ iterM (R.Maker.run output component) (TD.App.mkSuperModel inputModel mkAppModel)
 
     -- Start the App render
     root <- js_getElementById "root"
-    e <- R.markedElement TD.App.window (s ^. R.cModel)
+    e <- R.markedElement TD.App.window (s ^. R.gModel)
     RD.render (J.pToJSVal e) root
 
     -- Run the gadget effect which reads actions from 'Pipes.Concurrent.Input'
     -- and notifies html React of any state changes.
     -- runEffect will only stop if input is finished (which in this example never does).
-    s' <- P.runEffect $ appEffect s output input
+    s' <- P.runEffect $ appEffect s input output component
 
     -- Cleanup
     -- We actually never get here because in this example runEffect never quits
@@ -78,24 +77,20 @@ main = do
     CD.dispose (CD.disposing s')
 
 foreign import javascript unsafe
-  "$r = hgr$mkClass();"
-  js_shimComponent
-      :: IO J.JSVal
-
-foreign import javascript unsafe
   "$r = document.getElementById($1);"
   js_getElementById :: J.JSString -> IO J.JSVal
 
 appEffect
     :: MonadIO io
     => TD.App.SuperModel
-    -> PC.Output TD.App.Action
     -> PC.Input TD.App.Action
+    -> PC.Output TD.App.Action
+    -> R.ReactComponent
     -> P.Effect io TD.App.SuperModel
-appEffect s output input = do
+appEffect s input output component = do
     PL.execStateP s $
         appProducerIO input P.>->
-        runCommandsPipe output P.>->
+        runCommandsPipe output component P.>->
         PP.drain
 
 appProducerIO :: MonadIO io => PC.Input TD.App.Action -> P.Producer' (D.DList TD.App.Command) (StateT TD.App.SuperModel io) ()
@@ -107,12 +102,14 @@ appProducer input = PM.execInput input (G.runGadgetT TD.App.gadget)
 runCommandsPipe
     :: (MonadState TD.App.SuperModel io, MonadIO io)
     => PC.Output TD.App.Action
+    -> R.ReactComponent
     -> P.Pipe (D.DList TD.App.Command) () io ()
-runCommandsPipe output = PP.mapM (runCommands output)
+runCommandsPipe output component = PP.mapM (runCommands output component)
 
 runCommands
     :: (Foldable t, MonadState TD.App.SuperModel io, MonadIO io)
     => PC.Output TD.App.Action
+    -> R.ReactComponent
     -> t TD.App.Command
     -> io ()
-runCommands output = traverse_ (liftIO . TD.App.run id output)
+runCommands output component = traverse_ (liftIO . TD.App.run id output component)

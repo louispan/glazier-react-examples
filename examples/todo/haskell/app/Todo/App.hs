@@ -16,12 +16,12 @@ module Todo.App
     , Command(..)
     , Action(..)
     , AsAction(..)
-    , Callbacks(..)
-    , HasCallbacks(..)
-    , mkCallbacks
+    , Gasket(..)
+    , HasGasket(..)
+    , mkGasket
     , Model(..)
     , HasModel(..)
-    , CModel
+    , GModel
     , MModel
     , SuperModel
     , mkSuperModel
@@ -47,6 +47,7 @@ import qualified GHCJS.Foreign.Callback as J
 import qualified GHCJS.Marshal.Pure as J
 import qualified GHCJS.Types as J
 import qualified Glazier as G
+import qualified Glazier.React.Component as R
 import qualified Glazier.React.Maker as R
 import qualified Glazier.React.Markup as R
 import qualified Glazier.React.Model.Class as R
@@ -70,7 +71,7 @@ data Command
     = RenderCommand SuperModel [JE.Property] J.JSVal
 
     -- General Application level commands
-    -- | DisposeCommand should run dispose on the SomeDisposable (eg. to release Callbacks)
+    -- | DisposeCommand should run dispose on the SomeDisposable (eg. to release Gasket)
     | DisposeCommand CD.SomeDisposable
     -- | Runs maker widgets creations
     | MakerCommand (F (R.Maker Action) Action)
@@ -94,8 +95,7 @@ data Action
 
 data Model = Model
     -- Common widget model
-    { _shim :: J.JSVal
-    , _uid :: J.JSString
+    { _uid :: J.JSString
     , _componentRef :: J.JSVal
     , _frameNum :: Int
     , _deferredCommands :: D.DList Command
@@ -105,9 +105,10 @@ data Model = Model
     , _todosModel :: TodosModel'
     }
 
-data Callbacks = Callbacks
+data Gasket = Gasket
     -- Common widget callbacks
-    { _onRender ::  J.Callback (J.JSVal -> IO J.JSVal)
+    { _component :: R.ReactComponent
+    , _onRender ::  J.Callback (J.JSVal -> IO J.JSVal)
     , _onComponentRef :: J.Callback (J.JSVal -> IO ())
     , _onComponentDidUpdate :: J.Callback (J.JSVal -> IO ())
     -- TodoMVC specific callbacks
@@ -116,43 +117,43 @@ data Callbacks = Callbacks
 
 ----------------------------------------------------------
 -- The following should be the same per widget
--- | Callbacks and pure state
-type CModel = (Callbacks, Model)
+-- | Gasket and pure state
+type GModel = (Gasket, Model)
 -- | Mutable model for rendering callback
-type MModel = MVar CModel
--- | Contains MModel and CModel
-type SuperModel = (MModel, CModel)
+type MModel = MVar GModel
+-- | Contains MModel and GModel
+type SuperModel = (MModel, GModel)
 makeClassyPrisms ''Action
-makeClassy ''Callbacks
+makeClassy ''Gasket
 makeClassy ''Model
-instance CD.Disposing Callbacks
--- CModel
-instance R.HasCModel CModel CModel where
-    cModel = id
-instance HasCallbacks CModel where
-    callbacks = _1
-instance HasModel CModel where
+instance CD.Disposing Gasket
+-- GModel
+instance R.HasGModel GModel GModel where
+    gModel = id
+instance HasGasket GModel where
+    gasket = _1
+instance HasModel GModel where
     model = _2
-instance CD.Disposing CModel where
+instance CD.Disposing GModel where
     disposing s = CD.DisposeList
-        [ s ^. callbacks . to CD.disposing
+        [ s ^. gasket . to CD.disposing
         , s ^. model . to CD.disposing
         ]
 -- MModel
-instance R.HasMModel MModel CModel where
+instance R.HasMModel MModel GModel where
     mModel = id
 -- SuperModel
-instance R.HasMModel SuperModel CModel where
+instance R.HasMModel SuperModel GModel where
     mModel = _1
-instance R.HasCModel SuperModel CModel where
-    cModel = _2
-instance HasCallbacks SuperModel where
-    callbacks = R.cModel . callbacks
+instance R.HasGModel SuperModel GModel where
+    gModel = _2
+instance HasGasket SuperModel where
+    gasket = R.gModel . gasket
 instance HasModel SuperModel where
-    model = R.cModel . model
+    model = R.gModel . model
 instance CD.Disposing SuperModel where
     disposing s = CD.DisposeList
-        [ s ^. callbacks . to CD.disposing
+        [ s ^. gasket . to CD.disposing
         , s ^. model . to CD.disposing
         ]
 -- End same code per widget
@@ -168,15 +169,16 @@ mkSuperModel :: TD.Input.Model -> (TD.Input.SuperModel -> Model) -> F (R.Maker A
 mkSuperModel inputModel f = do
     inputSuperModel <- hoistF (R.mapAction $ review _InputAction) $
         TD.Input.mkSuperModel $ inputModel
-    R.mkSuperModel mkCallbacks $ \cbs -> (cbs, f inputSuperModel)
+    R.mkSuperModel mkGasket $ \cbs -> (cbs, f inputSuperModel)
 
 -- End similar code per widget
 ----------------------------------------------------------
 
-mkCallbacks :: MVar CModel -> F (R.Maker Action) Callbacks
-mkCallbacks ms = Callbacks
+mkGasket :: MVar GModel -> F (R.Maker Action) Gasket
+mkGasket ms = Gasket
     -- common widget callbacks
-    <$> (R.mkRenderer ms (const render))
+    <$> R.getComponent
+    <*> (R.mkRenderer ms (const render))
     <*> (R.mkHandler $ pure . pure . ComponentRefAction)
     <*> (R.mkHandler $ pure . pure . const ComponentDidUpdateAction)
     -- widget specific callbacks
@@ -186,18 +188,18 @@ hasActiveTodos :: TodosModel' -> Bool
 hasActiveTodos = getAny . foldMap (view (TD.Todo.model . TD.Todo.completed . to not . to Any))
 
 -- | This is used by parent components to render this component
-window :: Monad m => G.WindowT CModel (R.ReactMlT m) ()
+window :: Monad m => G.WindowT GModel (R.ReactMlT m) ()
 window = do
     s <- ask
-    lift $ R.lf (s ^. shim)
-        [ ("key",  s ^. uid . to J.jsval)
+    lift $ R.lf (s ^. component . to J.pToJSVal)
+        [ ("key",  s ^. uid . to J.pToJSVal)
         , ("render", s ^. onRender . to JE.PureJSVal . to J.pToJSVal)
         , ("ref", s ^. onComponentRef . to JE.PureJSVal . to J.pToJSVal)
         , ("componentDidUpdate", s ^. onComponentDidUpdate . to JE.PureJSVal . to J.pToJSVal)
         ]
 
 -- | This is used by the React render callback
-render :: Monad m => G.WindowT CModel (R.ReactMlT m) ()
+render :: Monad m => G.WindowT GModel (R.ReactMlT m) ()
 render = do
     s <- ask
     lift $ R.bh (JE.strval "header") [("className", JE.strval "header")] $ do
@@ -205,7 +207,7 @@ render = do
         view G._WindowT inputWindow s
         view G._WindowT mainWindow s
 
-mainWindow :: Monad m => G.WindowT CModel (R.ReactMlT m) ()
+mainWindow :: Monad m => G.WindowT GModel (R.ReactMlT m) ()
 mainWindow = do
     todos <- view todosModel
     if (null todos)
@@ -225,9 +227,9 @@ mainWindow = do
                         ]
             view G._WindowT todoListWindow s
 
-todoListWindow :: Monad m => G.WindowT CModel (R.ReactMlT m) ()
+todoListWindow :: Monad m => G.WindowT GModel (R.ReactMlT m) ()
 todoListWindow = do
-    todos <- fmap (view R.cModel . snd) . M.toList <$> view todosModel
+    todos <- fmap (view R.gModel . snd) . M.toList <$> view todosModel
     lift $ R.bh (JE.strval "ul") [ ("key", JE.strval "todo-list")
                                 , ("className", JE.strval "todo-list")
                                 ] $
@@ -275,11 +277,9 @@ appGadget = do
         RequestNewTodoAction str -> do
             n <- use todoSeqNum
             todoSeqNum %= (+ 1)
-            shim' <- use shim
             pure $ D.singleton $ MakerCommand $ do
                 ms <- hoistF (R.mapAction $ \act -> TodosAction (n, act)) $
                     TD.Todo.mkSuperModel $ TD.Todo.Model
-                        shim'
                         (J.pack . show $ n)
                         J.nullRef
                         0
@@ -308,8 +308,8 @@ appGadget = do
             then D.singleton $ TodosAction (k, TD.Todo.SetCompletedAction b)
             else mempty
 
-inputWindow :: Monad m => G.WindowT CModel (R.ReactMlT m) ()
-inputWindow = magnify (todoInput . R.cModel) TD.Input.window
+inputWindow :: Monad m => G.WindowT GModel (R.ReactMlT m) ()
+inputWindow = magnify (todoInput . R.gModel) TD.Input.window
 
 inputGadget :: Monad m => G.GadgetT Action SuperModel m (D.DList Command)
 inputGadget = fmap InputCommand <$> zoom todoInput (magnify _InputAction TD.Input.gadget)
