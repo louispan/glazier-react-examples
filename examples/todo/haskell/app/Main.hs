@@ -23,14 +23,14 @@ import qualified Glazier.React.Component as R
 import qualified Glazier.React.Maker.Run as R.Maker
 import qualified Glazier.React.Markup as R
 import qualified Glazier.React.ReactDOM as RD
-import qualified Glazier.React.Model.Class as R
+import qualified Glazier.React.Widget as R
+import qualified Glazier.React.Widgets.Input as W.Input
 import qualified Pipes as P
 import qualified Pipes.Concurrent as PC
 import qualified Pipes.Lift as PL
 import qualified Pipes.Misc as PM
 import qualified Pipes.Prelude as PP
 import qualified Todo.App as TD.App
-import qualified Todo.Input as TD.Input
 import qualified Todo.App.Run as TD.App
 
 -- | 'main' is used to create React classes and setup callbacks to be used externally by the browser.
@@ -47,9 +47,11 @@ main = do
     component <- R.mkComponent
 
     -- App Model
-    let inputModel = TD.Input.Model
+    let inputModel = W.Input.Model
             "newtodo"
+            J.nullRef
             "What needs to be done?"
+            "new-todo"
         mkAppModel inputSuperModel = TD.App.Model
             "todos"
             J.nullRef

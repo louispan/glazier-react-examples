@@ -17,8 +17,6 @@ executable glazier-react-todo
   hs-source-dirs:      examples/todo/haskell/app
   other-modules:       Todo.App
                        Todo.App.Run
-                       Todo.Input
-                       Todo.Input.Run
                        Todo.Todo
                        Todo.Todo.Run
                        Todo.Gadget
@@ -35,6 +33,7 @@ executable glazier-react-todo
                      , glazier >= 0.10 && < 1
                      , glazier-pipes >= 0.1.5 && < 0.2
                      , glazier-react >= 0.1 && < 1
+                     , glazier-react-widget >= 0.1 && < 1
                      , javascript-extras >= 0.1 && < 1
                      , lens >= 4 && < 5
                      , mmorph >= 1 && < 2

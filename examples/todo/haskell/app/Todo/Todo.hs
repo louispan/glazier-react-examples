@@ -16,15 +16,15 @@ module Todo.Todo
     , mkGasket
     , Model(..)
     , HasModel(..)
+    , mkSuperModel
+    , Widget
     , GModel
     , MModel
     , SuperModel
-    , mkSuperModel
     , window
     , gadget
     ) where
 
-import Control.Concurrent.MVar
 import qualified Control.Disposable as CD
 import Control.Lens
 import Control.Monad.Free.Church
@@ -44,13 +44,13 @@ import qualified Glazier.React.Component as R
 import qualified Glazier.React.Event as R
 import qualified Glazier.React.Maker as R
 import qualified Glazier.React.Markup as R
-import qualified Glazier.React.Model.Class as R
+import qualified Glazier.React.Widget as R
 import qualified JavaScript.Extras as JE
 import qualified Todo.Gadget as TD
 
 data Command
     -- Common widget commands
-    = RenderCommand SuperModel [JE.Property] J.JSVal
+    = RenderCommand (R.SuperModel Gasket Model) [JE.Property] J.JSVal
     -- widget specific commands
     | SetPropertyCommand JE.Property J.JSVal
     | FocusNodeCommand J.JSVal
@@ -99,59 +99,15 @@ data Gasket = Gasket
     , _onEditKeyDown :: J.Callback (J.JSVal -> IO ())
     } deriving G.Generic
 
-
-----------------------------------------------------------
--- The following should be the same per widget
--- | Gasket and pure state
-type GModel = (Gasket, Model)
--- | Mutable model for rendering callback
-type MModel = MVar GModel
--- | Contains MModel and GModel
-type SuperModel = (MModel, GModel)
 makeClassyPrisms ''Action
 makeClassy ''Gasket
 makeClassy ''Model
-instance CD.Disposing Gasket
--- GModel
-instance R.HasGModel GModel GModel where
-    gModel = id
-instance HasGasket GModel where
-    gasket = _1
-instance HasModel GModel where
-    model = _2
-instance CD.Disposing GModel
--- MModel
-instance R.HasMModel MModel GModel where
-    mModel = id
--- SuperModel
-instance R.HasMModel SuperModel GModel where
-    mModel = _1
-instance R.HasGModel SuperModel GModel where
-    gModel = _2
-instance HasGasket SuperModel where
-    gasket = R.gModel . gasket
-instance HasModel SuperModel where
-    model = R.gModel . model
-instance CD.Disposing SuperModel where
-    disposing s = CD.disposing $ s ^. R.gModel
--- End same code per widget
-----------------------------------------------------------
 
--- | This might be different per widget
-instance CD.Disposing Model where
-    disposing _ = CD.DisposeNone
-
-mkSuperModel :: Model -> F (R.Maker Action) SuperModel
-mkSuperModel s = R.mkSuperModel mkGasket $ \cbs -> (cbs, s)
-
--- End similar code per widget
-----------------------------------------------------------
-
-mkGasket :: MVar GModel -> F (R.Maker Action) Gasket
-mkGasket ms = Gasket
+mkGasket :: R.MModel Gasket Model -> F (R.Maker Action) Gasket
+mkGasket mm = Gasket
     -- common widget callbacks
     <$> R.getComponent
-    <*> (R.mkRenderer ms $ const render)
+    <*> (R.mkRenderer mm $ const render)
     <*> (R.mkHandler $ pure . pure . ComponentRefAction)
     <*> (R.mkHandler $ pure . pure . const ComponentDidUpdateAction)
     -- widget specific callbacks
@@ -161,6 +117,36 @@ mkGasket ms = Gasket
     <*> (R.mkHandler $ pure . pure . const DestroyAction)
     <*> (R.mkHandler $ pure . pure . const CancelEditAction)
     <*> (R.mkHandler onEditKeyDown')
+
+instance CD.Disposing Model where
+    disposing _ = CD.DisposeNone
+
+mkSuperModel :: Model -> F (R.Maker Action) SuperModel
+mkSuperModel s = R.mkSuperModel mkGasket $ \gsk -> R.GModel gsk s
+
+data Widget
+instance R.IsWidget Widget where
+    type Action Widget = Action
+    type Command Widget = Command
+    type Model Widget = Model
+    type Gasket Widget = Gasket
+type GModel = R.WidgetGModel Widget
+type MModel = R.WidgetMModel Widget
+type SuperModel = R.WidgetSuperModel Widget
+
+----------------------------------------------------------
+-- The following should be the same per widget (except for type params)
+instance CD.Disposing Gasket
+instance HasGasket (R.GModel Gasket Model) where
+    gasket = R.widgetGasket
+instance HasModel (R.GModel Gasket Model) where
+    model = R.widgetModel
+instance HasGasket (R.SuperModel Gasket Model) where
+    gasket = R.gModel . gasket
+instance HasModel (R.SuperModel Gasket Model) where
+    model = R.gModel . model
+-- End same code per widget
+----------------------------------------------------------
 
 -- | This is used by parent components to render this component
 window :: Monad m => G.WindowT GModel (R.ReactMlT m) ()

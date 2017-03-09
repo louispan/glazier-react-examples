@@ -21,15 +21,15 @@ module Todo.App
     , mkGasket
     , Model(..)
     , HasModel(..)
+    , mkSuperModel
+    , Widget
     , GModel
     , MModel
     , SuperModel
-    , mkSuperModel
     , window
     , gadget
     ) where
 
-import Control.Concurrent.MVar
 import qualified Control.Disposable as CD
 import Control.Lens
 import Control.Monad.Free.Church
@@ -50,14 +50,14 @@ import qualified Glazier as G
 import qualified Glazier.React.Component as R
 import qualified Glazier.React.Maker as R
 import qualified Glazier.React.Markup as R
-import qualified Glazier.React.Model.Class as R
+import qualified Glazier.React.Widget as R
+import qualified Glazier.React.Widgets.Input as W.Input
 import qualified JavaScript.Extras as JE
-import qualified Todo.Input as TD.Input
 import qualified Todo.Todo as TD.Todo
 
 type TodosKey = Int
 
-type TodosValue = TD.Todo.SuperModel
+type TodosValue = R.WidgetSuperModel TD.Todo.Widget
 
 type TodosModel' = M.Map TodosKey TodosValue
 
@@ -68,7 +68,7 @@ type TodosAction' = (TodosKey, TD.Todo.Action)
 data Command
     -- Common widget commands
     -- | This should result in React component @setState({ frameNum: i })@
-    = RenderCommand SuperModel [JE.Property] J.JSVal
+    = RenderCommand (R.SuperModel Gasket Model) [JE.Property] J.JSVal
 
     -- General Application level commands
     -- | DisposeCommand should run dispose on the SomeDisposable (eg. to release Gasket)
@@ -78,7 +78,7 @@ data Command
     | SendActionsCommand [Action]
 
     -- TodoMVC specific commands
-    | InputCommand TD.Input.Command
+    | InputCommand (W.Input.Command Action)
     | TodosCommand TodosCommand'
 
 data Action
@@ -90,7 +90,7 @@ data Action
     | DestroyTodoAction TodosKey
     | RequestNewTodoAction J.JSString
     | AddNewTodoAction TodosKey TodosValue
-    | InputAction TD.Input.Action
+    | InputAction (W.Input.Action Action)
     | TodosAction TodosAction'
 
 data Model = Model
@@ -101,7 +101,7 @@ data Model = Model
     , _deferredCommands :: D.DList Command
     -- TodoMVC specifc model
     , _todoSeqNum :: TodosKey
-    , _todoInput :: TD.Input.SuperModel
+    , _todoInput :: R.WidgetSuperModel (W.Input.Widget Action)
     , _todosModel :: TodosModel'
     }
 
@@ -115,67 +115,57 @@ data Gasket = Gasket
     , _fireToggleCompleteAll :: J.Callback (J.JSVal -> IO ())
     } deriving (G.Generic)
 
-----------------------------------------------------------
--- The following should be the same per widget
--- | Gasket and pure state
-type GModel = (Gasket, Model)
--- | Mutable model for rendering callback
-type MModel = MVar GModel
--- | Contains MModel and GModel
-type SuperModel = (MModel, GModel)
 makeClassyPrisms ''Action
 makeClassy ''Gasket
 makeClassy ''Model
-instance CD.Disposing Gasket
--- GModel
-instance R.HasGModel GModel GModel where
-    gModel = id
-instance HasGasket GModel where
-    gasket = _1
-instance HasModel GModel where
-    model = _2
-instance CD.Disposing GModel
--- MModel
-instance R.HasMModel MModel GModel where
-    mModel = id
--- SuperModel
-instance R.HasMModel SuperModel GModel where
-    mModel = _1
-instance R.HasGModel SuperModel GModel where
-    gModel = _2
-instance HasGasket SuperModel where
-    gasket = R.gModel . gasket
-instance HasModel SuperModel where
-    model = R.gModel . model
-instance CD.Disposing SuperModel where
-    disposing s = CD.disposing $ s ^. R.gModel
--- End same code per widget
-----------------------------------------------------------
 
--- | This might be different per widget
+mkGasket :: (R.MModel Gasket Model) -> F (R.Maker Action) Gasket
+mkGasket mm = Gasket
+    -- common widget callbacks
+    <$> R.getComponent
+    <*> (R.mkRenderer mm (const render))
+    <*> (R.mkHandler $ pure . pure . ComponentRefAction)
+    <*> (R.mkHandler $ pure . pure . const ComponentDidUpdateAction)
+    -- widget specific callbacks
+    <*> (R.mkHandler $ pure . pure . const ToggleCompleteAllAction)
+
 instance CD.Disposing Model where
     disposing s = CD.DisposeList $
         CD.disposing (s ^. todoInput)
         : foldr ((:) . CD.disposing) [] (s ^. todosModel)
 
-mkSuperModel :: TD.Input.Model -> (TD.Input.SuperModel -> Model) -> F (R.Maker Action) SuperModel
+mkSuperModel
+    :: W.Input.Model
+    -> (R.WidgetSuperModel (W.Input.Widget Action) -> Model)
+    -> F (R.Maker Action) (R.SuperModel Gasket Model)
 mkSuperModel inputModel f = do
     inputSuperModel <- hoistF (R.mapAction $ review _InputAction) $
-        TD.Input.mkSuperModel $ inputModel
-    R.mkSuperModel mkGasket $ \cbs -> (cbs, f inputSuperModel)
+        W.Input.mkSuperModel $ inputModel
+    R.mkSuperModel mkGasket $ \gsk -> R.GModel gsk (f inputSuperModel)
 
--- End similar code per widget
+data Widget
+instance R.IsWidget Widget where
+    type Action Widget = Action
+    type Command Widget = Command
+    type Model Widget = Model
+    type Gasket Widget = Gasket
+type GModel = R.WidgetGModel Widget
+type MModel = R.WidgetMModel Widget
+type SuperModel = R.WidgetSuperModel Widget
+
 ----------------------------------------------------------
-
-mkGasket :: MVar GModel -> F (R.Maker Action) Gasket
-mkGasket ms = Gasket
-    -- common widget callbacks
-    <$> R.getComponent
-    <*> (R.mkRenderer ms (const render))
-    <*> (R.mkHandler $ pure . pure . ComponentRefAction)
-    <*> (R.mkHandler $ pure . pure . const ComponentDidUpdateAction)
-    -- widget specific callbacks
-    <*> (R.mkHandler $ pure . pure . const ToggleCompleteAllAction)
+-- The following should be the same per widget (except for type params)
+instance CD.Disposing Gasket
+instance HasGasket (R.GModel Gasket Model) where
+    gasket = R.widgetGasket
+instance HasModel (R.GModel Gasket Model) where
+    model = R.widgetModel
+instance HasGasket (R.SuperModel Gasket Model) where
+    gasket = R.gModel . gasket
+instance HasModel (R.SuperModel Gasket Model) where
+    model = R.gModel . model
+-- End same code per widget
+----------------------------------------------------------
 
 hasActiveTodos :: TodosModel' -> Bool
 hasActiveTodos = getAny . foldMap (view (TD.Todo.model . TD.Todo.completed . to not . to Any))
@@ -258,8 +248,8 @@ appGadget = do
             -- queue up callbacks to be released after rerendering
             ts <- use todosModel
             ret <- runMaybeT $ do
-                (_, todoModel) <- MaybeT $ pure $ M.lookup k ts
-                let junk = CD.disposing todoModel
+                todoSuperModel <- MaybeT $ pure $ M.lookup k ts
+                let junk = CD.disposing todoSuperModel
                 deferredCommands %= (`D.snoc` DisposeCommand junk)
                 -- Remove the todo from the model
                 todosModel %= M.delete k
@@ -294,18 +284,18 @@ appGadget = do
     toggleCompleteAll
         :: Bool
         -> TodosKey
-        -> TD.Todo.SuperModel
+        -> R.WidgetSuperModel TD.Todo.Widget
         -> D.DList Action
-    toggleCompleteAll b k (_, s) =
-        if (s ^. (TD.Todo.model . TD.Todo.completed) /= b)
+    toggleCompleteAll b k todoSuperModel =
+        if (todoSuperModel ^. (TD.Todo.model . TD.Todo.completed) /= b)
             then D.singleton $ TodosAction (k, TD.Todo.SetCompletedAction b)
             else mempty
 
 inputWindow :: Monad m => G.WindowT GModel (R.ReactMlT m) ()
-inputWindow = magnify (todoInput . R.gModel) TD.Input.window
+inputWindow = magnify (todoInput . R.gModel) W.Input.window
 
 inputGadget :: Monad m => G.GadgetT Action SuperModel m (D.DList Command)
-inputGadget = fmap InputCommand <$> zoom todoInput (magnify _InputAction TD.Input.gadget)
+inputGadget = fmap InputCommand <$> zoom todoInput (magnify _InputAction W.Input.gadget)
 
 todosGadget :: Monad m => G.GadgetT TodosAction' TodosModel' m (D.DList TodosCommand')
 todosGadget = do
