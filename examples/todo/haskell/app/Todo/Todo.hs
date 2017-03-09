@@ -126,10 +126,10 @@ mkSuperModel s = R.mkSuperModel mkGasket $ \gsk -> R.GModel gsk s
 
 data Widget
 instance R.IsWidget Widget where
-    type Action Widget = Action
-    type Command Widget = Command
-    type Model Widget = Model
-    type Gasket Widget = Gasket
+    type WidgetAction Widget = Action
+    type WidgetCommand Widget = Command
+    type WidgetModel Widget = Model
+    type WidgetGasket Widget = Gasket
 type GModel = R.WidgetGModel Widget
 type MModel = R.WidgetMModel Widget
 type SuperModel = R.WidgetSuperModel Widget

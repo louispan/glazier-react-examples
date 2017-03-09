@@ -52,6 +52,7 @@ import qualified Glazier.React.Maker as R
 import qualified Glazier.React.Markup as R
 import qualified Glazier.React.Widget as R
 import qualified Glazier.React.Widgets.Input as W.Input
+-- import qualified Glazier.React.Widgets.List as W.List
 import qualified JavaScript.Extras as JE
 import qualified Todo.Todo as TD.Todo
 
@@ -145,10 +146,10 @@ mkSuperModel inputModel f = do
 
 data Widget
 instance R.IsWidget Widget where
-    type Action Widget = Action
-    type Command Widget = Command
-    type Model Widget = Model
-    type Gasket Widget = Gasket
+    type WidgetAction Widget = Action
+    type WidgetCommand Widget = Command
+    type WidgetModel Widget = Model
+    type WidgetGasket Widget = Gasket
 type GModel = R.WidgetGModel Widget
 type MModel = R.WidgetMModel Widget
 type SuperModel = R.WidgetSuperModel Widget
