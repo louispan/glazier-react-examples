@@ -25,6 +25,7 @@ import qualified Glazier.React.Markup as R
 import qualified Glazier.React.ReactDOM as RD
 import qualified Glazier.React.Widget as R
 import qualified Glazier.React.Widgets.Input as W.Input
+import qualified Glazier.React.Widgets.List as W.List
 import qualified Pipes as P
 import qualified Pipes.Concurrent as PC
 import qualified Pipes.Lift as PL
@@ -42,7 +43,7 @@ main = do
     -- Create a 'Pipes.Concurrent' mailbox for receiving actions from html events.
     -- NB. using 'PC.bounded 1' also works without deadlocks, but doesn't save memory
     -- blocked events are kept by the GHCJCS runtime.
-    (output, input) <- liftIO . PC.spawn $ PC.unbounded
+    (output, input) <- PC.spawn $ PC.unbounded
 
     component <- R.mkComponent
 
@@ -52,15 +53,21 @@ main = do
             J.nullRef
             "What needs to be done?"
             "new-todo"
-        mkAppModel inputSuperModel = TD.App.Model
+        todosModel = W.List.Model
+             "todo-list"
+             J.nullRef
+             0
+             mempty
+             "todo-list"
+             0
+             mempty
+        mkAppModel inputSuperModel todosSuperModel = TD.App.Model
             "todos"
             J.nullRef
             0
-            mempty
-            0
             inputSuperModel
-            mempty
-    s <- liftIO $ iterM (R.Maker.run output component) (TD.App.mkSuperModel inputModel mkAppModel)
+            todosSuperModel
+    s <- liftIO $ iterM (R.Maker.run component output) (TD.App.mkSuperModel inputModel todosModel mkAppModel)
 
     -- Start the App render
     root <- js_getElementById "root"
@@ -114,4 +121,4 @@ runCommands
     -> R.ReactComponent
     -> t TD.App.Command
     -> io ()
-runCommands output component = traverse_ (liftIO . TD.App.run id output component)
+runCommands output component = traverse_ (liftIO . TD.App.run component output)

@@ -10,14 +10,15 @@ import qualified JavaScript.Extras as JE
 import qualified Pipes.Concurrent as PC
 import Todo.Todo
 
-run :: act -> PC.Output act -> Command -> IO ()
-run destroyTodoAction output DestroyCommand = void $ atomically $ PC.send output destroyTodoAction
+run :: PC.Output Action -> Command -> IO ()
 
-run _ _ (SetPropertyCommand prop j) = JE.setProperty prop j
+run _ (SetPropertyCommand prop j) = JE.setProperty prop j
 
-run _ _ (RenderCommand sm props j) = R.componentSetState sm props j
+run _ (RenderCommand sm props j) = R.componentSetState sm props j
 
-run _ _ (FocusNodeCommand j) = js_focus j
+run _ (FocusNodeCommand j) = js_focus j
+
+run output (SendActionCommand act) = void $ atomically $ PC.send output act
 
 foreign import javascript unsafe
   "if ($1 && $1['focus']) { $1['focus'](); }"

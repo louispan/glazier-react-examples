@@ -46,22 +46,18 @@ import qualified Glazier.React.Maker as R
 import qualified Glazier.React.Markup as R
 import qualified Glazier.React.Widget as R
 import qualified JavaScript.Extras as JE
-import qualified Todo.Gadget as TD
+import qualified Glazier.React.Widgets.Input as W.Input
 
 data Command
-    -- Common widget commands
     = RenderCommand (R.SuperModel Gasket Model) [JE.Property] J.JSVal
-    -- widget specific commands
     | SetPropertyCommand JE.Property J.JSVal
     | FocusNodeCommand J.JSVal
-    | DestroyCommand
+    | SendActionCommand Action
 
 data Action
-    -- Common widget actions
     = ComponentRefAction J.JSVal
     | ComponentDidUpdateAction
     | SendCommandsAction [Command]
-    -- widget specific actions
     | EditRefAction J.JSVal
     | StartEditAction
     | FocusEditAction
@@ -72,12 +68,10 @@ data Action
     | SubmitAction J.JSString
 
 data Model = Model
-    -- common widget model
     { _uid :: J.JSString
     , _componentRef :: J.JSVal
     , _frameNum :: Int
     , _deferredActions :: D.DList Action
-    -- widget specifc model
     , _editRef :: J.JSVal
     , _value :: J.JSString
     , _completed :: Bool
@@ -85,12 +79,10 @@ data Model = Model
     }
 
 data Gasket = Gasket
-    -- common widget callbacks
     { _component :: R.ReactComponent
     , _onRender :: J.Callback (J.JSVal -> IO J.JSVal)
     , _onComponentRef :: J.Callback (J.JSVal -> IO ())
     , _onComponentDidUpdate :: J.Callback (J.JSVal -> IO ())
-    -- widget specific callbacks
     , _onEditRef :: J.Callback (J.JSVal -> IO ())
     , _fireToggleComplete :: J.Callback (J.JSVal -> IO ())
     , _fireStartEdit :: J.Callback (J.JSVal -> IO ())
@@ -105,12 +97,10 @@ makeClassy ''Model
 
 mkGasket :: R.MModel Gasket Model -> F (R.Maker Action) Gasket
 mkGasket mm = Gasket
-    -- common widget callbacks
     <$> R.getComponent
     <*> (R.mkRenderer mm $ const render)
     <*> (R.mkHandler $ pure . pure . ComponentRefAction)
     <*> (R.mkHandler $ pure . pure . const ComponentDidUpdateAction)
-    -- widget specific callbacks
     <*> (R.mkHandler $ pure . pure . EditRefAction)
     <*> (R.mkHandler $ pure . pure . const ToggleCompletedAction)
     <*> (R.mkHandler $ pure . pure . const StartEditAction)
@@ -162,11 +152,12 @@ window = do
 render :: Monad m => G.WindowT GModel (R.ReactMlT m) ()
 render = do
     s <- ask
-    lift $ R.bh (JE.strval "li") [ ("className"
-                                 , classNames [("completed", s ^. completed), ("editing", s ^. editing)])] $ do
+    lift $ R.bh (JE.strval "li") [ ("className", classNames [ ("completed", s ^. completed)
+                                                            , ("editing", s ^. editing)])
+                                 ] $ do
         R.bh (JE.strval "div") [ ("key", JE.strval "view")
-                              , ("className", JE.strval "view")
-                              ] $ do
+                               , ("className", JE.strval "view")
+                               ] $ do
             R.lf (JE.strval "input") [ ("key", JE.strval "toggle")
                                     , ("className", JE.strval "toggle")
                                     , ("type", JE.strval "checkbox")
@@ -174,18 +165,17 @@ render = do
                                     , ("onChange", s ^. fireToggleComplete . to J.jsval)
                                     ]
             R.bh (JE.strval "label")  [ ("key", JE.strval "label")
-                                     , ("onDoubleClick", s ^. fireStartEdit. to J.jsval)
-                                     ] (s ^. value . to R.txt)
+                                      , ("onDoubleClick", s ^. fireStartEdit. to J.jsval)
+                                      ] (s ^. value . to R.txt)
             R.lf (JE.strval "button") [ ("key", JE.strval "destroy")
-                                     , ("className", JE.strval "destroy")
-                                     , ("onClick", s ^. fireDestroy . to J.jsval)
-                                     ]
+                                      , ("className", JE.strval "destroy")
+                                      , ("onClick", s ^. fireDestroy . to J.jsval)
+                                      ]
         -- For uncontrolled components, we need to generate a new key per render
-        -- in for react to use the new defaultValue
+        -- in order for react to use the new defaultValue
         R.lf (JE.strval "input") [ ("key", J.jsval $ J.unwords
                                        [ s ^. uid
-                                       , s ^. completed . to show . to J.pack
-                                       , s ^.  frameNum . to show . to J.pack
+                                       , s ^. frameNum . to show . to J.pack
                                        ])
                                 , ("ref", s ^.  onEditRef . to J.jsval)
                                 , ("className", JE.strval "edit")
@@ -199,7 +189,7 @@ classNames :: [(J.JSString, Bool)] -> J.JSVal
 classNames = J.jsval . J.unwords . fmap fst . filter snd
 
 onEditKeyDown' :: J.JSVal -> MaybeT IO [Action]
-onEditKeyDown' = R.eventHandlerM TD.onInputKeyDown goLazy
+onEditKeyDown' = R.eventHandlerM W.Input.whenKeyDown goLazy
   where
     goLazy :: (Maybe J.JSString, J.JSVal) -> MaybeT IO [Action]
     goLazy (ms, j) = pure $
@@ -258,7 +248,8 @@ gadget = do
                 lift $ D.singleton <$> renderCmd
             maybe (pure mempty) pure ret
 
-        DestroyAction -> pure $ D.singleton DestroyCommand
+        -- parent widgets should detect this case to do something with submitted action
+        DestroyAction -> pure mempty
 
         CancelEditAction -> do
             editing .= False
@@ -270,7 +261,7 @@ gadget = do
             value .= v'
             editing .= False
             if J.null v'
-                then pure $ D.singleton DestroyCommand
+                then pure $ D.singleton $ SendActionCommand DestroyAction
                 else D.singleton <$> renderCmd
 
 -- | Just change the state to something different so the React pureComponent will call render()
