@@ -19,13 +19,16 @@ import qualified Glazier.React.Widgets.List as W.List
 import qualified Glazier.React.Widgets.List.Run as W.List
 import qualified Pipes.Concurrent as PC
 import Todo.App as TD.App
+import qualified Todo.Footer.Run as TD.Footer
 import qualified Todo.Todo.Run as TD.Todo
 
 run :: R.ReactComponent -> PC.Output Action -> Command -> IO ()
 
 run _ _ (RenderCommand sm props j) = R.componentSetState sm props j
 
-run _ output (SendActionsCommand acts) = void $ runMaybeT $ traverse_ (\act -> lift $ atomically $ PC.send output act >>= guard) acts
+run _ output (SendActionsCommand acts) =
+    void $ runMaybeT $
+    traverse_ (\act -> lift $ atomically $ PC.send output act >>= guard) acts
 
 run _ output (InputCommand cmd) = W.Input.run output cmd
 
@@ -35,3 +38,5 @@ run comp output (TodosCommand cmd) =
         comp
         (contramap TodosAction output)
         cmd
+
+run _ _ (FooterCommand cmd) = TD.Footer.run cmd

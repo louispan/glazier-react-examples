@@ -13,13 +13,16 @@ import Control.Monad.Free.Church
 import Control.Monad.IO.Class
 import Control.Monad.Morph
 import Control.Monad.State.Strict
+import Control.Monad.Trans.Maybe
 import qualified Data.DList as D
 import Data.Foldable
 import qualified Data.JSString as J
+import qualified GHCJS.Foreign.Callback as J
 import qualified GHCJS.Marshal.Pure as J
 import qualified GHCJS.Types as J
 import qualified Glazier as G
 import qualified Glazier.React.Component as R
+import qualified Glazier.React.Maker as R.Maker
 import qualified Glazier.React.Maker.Run as R.Maker
 import qualified Glazier.React.Markup as R
 import qualified Glazier.React.ReactDOM as RD
@@ -33,6 +36,8 @@ import qualified Pipes.Misc as PM
 import qualified Pipes.Prelude as PP
 import qualified Todo.App as TD.App
 import qualified Todo.App.Run as TD.App
+import qualified Todo.Footer as TD.Footer
+import qualified Todo.Filter as TD.Filter
 
 -- | 'main' is used to create React classes and setup callbacks to be used externally by the browser.
 -- GHCJS runs 'main' lazily.
@@ -61,18 +66,38 @@ main = do
              "todo-list"
              0
              mempty
-        mkAppModel inputSuperModel todosSuperModel = TD.App.Model
+             (const True)
+        footerModel = TD.Footer.Model
+            "footer"
+            J.nullRef
+            0
+            0
+            0
+            TD.Filter.All
+        mkAppModel inputSuperModel todosSuperModel footerSuperModel = TD.App.Model
             "todos"
             J.nullRef
             0
             inputSuperModel
             todosSuperModel
-    s <- liftIO $ iterM (R.Maker.run component output) (TD.App.mkSuperModel inputModel todosModel mkAppModel)
+            footerSuperModel
+    s <- iterM (R.Maker.run component output) (TD.App.mkSuperModel inputModel todosModel footerModel mkAppModel)
 
     -- Start the App render
     root <- js_getElementById "root"
     e <- R.markedElement TD.App.window (s ^. R.gModel)
     RD.render (J.pToJSVal e) root
+
+    -- The footer uses uses hashChange to fire events
+    onHashChange' <- iterM (R.Maker.run component output)
+        (hoistF (R.Maker.mapAction $ review TD.App._FooterAction) (R.Maker.mkHandler TD.Footer.onHashChange))
+    js_addHashChangeListener onHashChange'
+
+    -- Fire the initial hashChange action
+    hash <- js_getHash
+    void $ runMaybeT $ do
+        acts <- (fmap (review TD.App._FooterAction)) <$> TD.Footer.withHashChange hash
+        traverse_ (\act -> lift $ atomically $ PC.send output act >>= guard) acts
 
     -- Run the gadget effect which reads actions from 'Pipes.Concurrent.Input'
     -- and notifies html React of any state changes.
@@ -84,10 +109,19 @@ main = do
     -- but in other apps, gadgetEffect might be quit-able (eg with MaybeT)
     -- so let's just be explicit where cleanup code would be.
     CD.dispose (CD.disposing s')
+    CD.dispose (CD.disposing onHashChange')
 
 foreign import javascript unsafe
   "$r = document.getElementById($1);"
   js_getElementById :: J.JSString -> IO J.JSVal
+
+foreign import javascript unsafe
+  "window.addEventListener('hashchange', $1, false);"
+  js_addHashChangeListener :: J.Callback a -> IO ()
+
+foreign import javascript unsafe
+  "$r = window.location.hash;"
+  js_getHash :: IO J.JSString
 
 appEffect
     :: MonadIO io

@@ -29,10 +29,8 @@ import qualified Control.Disposable as CD
 import Control.Lens
 import Control.Monad.Free.Church
 import Control.Monad.Reader
-import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import qualified Data.DList as D
-import Data.Foldable
 import qualified Data.JSString as J
 import qualified GHC.Generics as G
 import qualified GHCJS.Foreign.Callback as J
@@ -40,22 +38,24 @@ import qualified GHCJS.Marshal.Pure as J
 import qualified GHCJS.Nullable as J
 import qualified GHCJS.Types as J
 import qualified Glazier as G
+import qualified Glazier.React.Command as R
 import qualified Glazier.React.Component as R
 import qualified Glazier.React.Event as R
 import qualified Glazier.React.Maker as R
 import qualified Glazier.React.Markup as R
 import qualified Glazier.React.Widget as R
-import qualified JavaScript.Extras as JE
 import qualified Glazier.React.Widgets.Input as W.Input
+import qualified JavaScript.Extras as JE
 
 data Command
     = RenderCommand (R.SuperModel Gasket Model) [JE.Property] J.JSVal
     | SetPropertyCommand JE.Property J.JSVal
     | FocusNodeCommand J.JSVal
-    | SendActionCommand Action
+    | SendActionsCommand [Action]
 
 data Action
     = ComponentRefAction J.JSVal
+    | RenderAction
     | ComponentDidUpdateAction
     | SendCommandsAction [Command]
     | EditRefAction J.JSVal
@@ -206,14 +206,16 @@ gadget = do
             componentRef .= node
             pure mempty
 
+        RenderAction ->
+            D.singleton <$> R.basicRenderCmd frameNum componentRef RenderCommand
+
         ComponentDidUpdateAction -> do
             -- Run delayed action that need to wait until frame is re-rendered
             -- Eg focusing after other rendering changes
             acts <- use deferredActions
             deferredActions .= mempty
             -- st :: Action -> StateT SuperModel m (D.DList Command)
-            let st = runReaderT (G.runGadgetT gadget)
-            G.GadgetT (lift (fold <$> (traverse st (D.toList acts))))
+            pure $ D.singleton $ SendActionsCommand $ D.toList acts
 
         SendCommandsAction cmds -> pure $ D.fromList cmds
 
@@ -232,11 +234,11 @@ gadget = do
 
         ToggleCompletedAction -> do
             completed %= not
-            D.singleton <$> renderCmd
+            D.singleton <$> R.basicRenderCmd frameNum componentRef RenderCommand
 
         SetCompletedAction b -> do
             completed .= b
-            D.singleton <$> renderCmd
+            D.singleton <$> R.basicRenderCmd frameNum componentRef RenderCommand
 
         StartEditAction -> do
             ret <- runMaybeT $ do
@@ -245,7 +247,7 @@ gadget = do
                 editing .= True
                 -- Need to delay focusing until after the next render
                 deferredActions %= (`D.snoc` FocusEditAction)
-                lift $ D.singleton <$> renderCmd
+                D.singleton <$> R.basicRenderCmd frameNum componentRef RenderCommand
             maybe (pure mempty) pure ret
 
         -- parent widgets should detect this case to do something with submitted action
@@ -253,7 +255,7 @@ gadget = do
 
         CancelEditAction -> do
             editing .= False
-            D.singleton <$> renderCmd
+            D.singleton <$> R.basicRenderCmd frameNum componentRef RenderCommand
 
         SubmitAction v -> do
             -- trim the text
@@ -261,14 +263,5 @@ gadget = do
             value .= v'
             editing .= False
             if J.null v'
-                then pure $ D.singleton $ SendActionCommand DestroyAction
-                else D.singleton <$> renderCmd
-
--- | Just change the state to something different so the React pureComponent will call render()
-renderCmd :: Monad m => G.GadgetT Action SuperModel m Command
-renderCmd = do
-    frameNum %= (\i -> (i + 1) `mod` 100)
-    i <- J.pToJSVal <$> use frameNum
-    r <- use (model . componentRef)
-    sm <- get
-    pure $ RenderCommand sm [("frameNum", i)] r
+                then pure $ D.singleton $ SendActionsCommand [DestroyAction]
+                else D.singleton <$> R.basicRenderCmd frameNum componentRef RenderCommand
