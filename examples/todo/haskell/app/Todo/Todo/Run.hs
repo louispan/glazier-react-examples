@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Todo.Todo.Run
     ( run
     ) where
@@ -25,6 +26,15 @@ run output (SendActionsCommand acts) =
     void $ runMaybeT $
     traverse_ (\act -> lift $ atomically $ PC.send output act >>= guard) acts
 
+#ifdef __GHCJS__
+
 foreign import javascript unsafe
   "if ($1 && $1['focus']) { $1['focus'](); }"
   js_focus :: J.JSVal -> IO ()
+
+#else
+
+js_focus :: J.JSVal -> IO ()
+js_focus _ = pure ()
+
+#endif

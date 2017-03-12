@@ -1,9 +1,7 @@
 SHELL := /bin/bash
-INSTALL_ROOT:=$(shell stack path --local-install-root)
 PROJECT_ROOT:=$(shell stack path --project-root)
-GHCJS_OUT:=$(INSTALL_ROOT)/bin/glazier-react-todo.jsexe
 
-.PHONY: all install install-min clean start stack-build
+.PHONY: all install install-min paths clean start build
 
 all: install
 	@true # dependency tracking doesn't work for empty @targets
@@ -20,17 +18,25 @@ install-min: build/todo.min.js install
 clean:
 	rm -rf node_modules
 	rm -rf build
+	stack clean
 
 start: install
 	npm start
 
-stack-build:
-	stack build
+paths: $(PROJECT_ROOT)/stack.ghcjs.yaml
+	$(eval INSTALL_ROOT := $(shell stack --stack-yaml $(PROJECT_ROOT)/stack.ghcjs.yaml path --local-install-root))
+	$(eval GHCJS_OUT:=$(INSTALL_ROOT)/bin/glazier-react-todo.jsexe)
 
-$(GHCJS_OUT)/all.js: stack-build
+build: $(PROJECT_ROOT)/stack.ghcjs.yaml
+	stack build --stack-yaml $(PROJECT_ROOT)/stack.ghcjs.yaml
+
+$(PROJECT_ROOT)/stack.ghcjs.yaml: $(PROJECT_ROOT)/stack.yaml  $(PROJECT_ROOT)/ghcjs.yaml
+	cat $(PROJECT_ROOT)/stack.yaml $(PROJECT_ROOT)/ghcjs.yaml > $(PROJECT_ROOT)/stack.ghcjs.yaml
+
+$(GHCJS_OUT)/all.js: build
 	@true # dependency tracking doesn't work for empty @targets
 
-$(GHCJS_OUT)/all.js.externs: stack-build
+$(GHCJS_OUT)/all.js.externs: build
 	@true # dependency tracking doesn't work for empty @targets
 
 # add a nodeJS module wrapper http://edsko.net/2015/02/14/atom-haskell/
@@ -40,14 +46,14 @@ $(GHCJS_OUT)/all.js.externs: stack-build
 # "ERROR - Closure dependency methods(goog.provide, goog.require, etc)
 # must be called at file scope. "
 # This step also removes the dummy calls to goog.provide and goog.require.
-build/todo.js: $(GHCJS_OUT)/all.js haskell/jsexports/exports.header haskell/jsexports/exports.js
+build/todo.js: paths $(GHCJS_OUT)/all.js haskell/jsexports/exports.header haskell/jsexports/exports.js
 	mkdir -p build
 	cat haskell/jsexports/exports.header \
 		<(sed -e '/goog.provide.*/d;/goog.require.*/d' $(GHCJS_OUT)/all.js) \
 		haskell/jsexports/exports.js \
 		> build/todo.js
 
-build/todo.min.js: build/react-externs.js $(GHCJS_OUT)/all.js.externs build/todo.js
+build/todo.min.js: paths build/react-externs.js $(GHCJS_OUT)/all.js.externs build/todo.js
 	closure-compiler \
 		--compilation_level=ADVANCED_OPTIMIZATIONS \
 		--externs build/react-externs.js \

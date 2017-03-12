@@ -1,4 +1,4 @@
-{-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -111,18 +111,6 @@ main = do
     CD.dispose (CD.disposing s')
     CD.dispose (CD.disposing onHashChange')
 
-foreign import javascript unsafe
-  "$r = document.getElementById($1);"
-  js_getElementById :: J.JSString -> IO J.JSVal
-
-foreign import javascript unsafe
-  "window.addEventListener('hashchange', $1, false);"
-  js_addHashChangeListener :: J.Callback a -> IO ()
-
-foreign import javascript unsafe
-  "$r = window.location.hash;"
-  js_getHash :: IO J.JSString
-
 appEffect
     :: MonadIO io
     => TD.App.SuperModel
@@ -156,3 +144,31 @@ runCommands
     -> t TD.App.Command
     -> io ()
 runCommands output component = traverse_ (liftIO . TD.App.run component output)
+
+#ifdef __GHCJS__
+
+foreign import javascript unsafe
+  "$r = document.getElementById($1);"
+  js_getElementById :: J.JSString -> IO J.JSVal
+
+foreign import javascript unsafe
+  "window.addEventListener('hashchange', $1, false);"
+  js_addHashChangeListener :: J.Callback a -> IO ()
+
+foreign import javascript unsafe
+  "$r = window.location.hash;"
+  js_getHash :: IO J.JSString
+
+#else
+
+js_getElementById :: J.JSString -> IO J.JSVal
+js_getElementById _ = pure J.nullRef
+
+js_addHashChangeListener :: J.Callback a -> IO ()
+js_addHashChangeListener _ = pure ()
+
+js_getHash :: IO J.JSString
+js_getHash = pure J.empty
+
+
+#endif
