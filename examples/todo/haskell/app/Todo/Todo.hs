@@ -34,7 +34,6 @@ import qualified Data.DList as D
 import qualified Data.JSString as J
 import qualified GHC.Generics as G
 import qualified GHCJS.Foreign.Callback as J
-import qualified GHCJS.Marshal.Pure as J
 import qualified GHCJS.Nullable as J
 import qualified GHCJS.Types as J
 import qualified Glazier as G
@@ -142,58 +141,58 @@ instance HasModel (R.SuperModel Gasket Model) where
 window :: Monad m => G.WindowT GModel (R.ReactMlT m) ()
 window = do
     s <- ask
-    lift $ R.lf (s ^. component . to J.pToJSVal)
-        [ ("key",  s ^. uid . to J.pToJSVal)
-        , ("render", s ^. onRender . to JE.PureJSVal . to J.pToJSVal)
-        , ("ref", s ^. onComponentRef . to JE.PureJSVal . to J.pToJSVal)
-        , ("componentDidUpdate", s ^. onComponentDidUpdate . to JE.PureJSVal . to J.pToJSVal)
+    lift $ R.lf (s ^. component . to JE.toJS)
+        [ ("key",  s ^. uid . to JE.toJS)
+        , ("render", s ^. onRender . to JE.toJS)
+        , ("ref", s ^. onComponentRef . to JE.toJS)
+        , ("componentDidUpdate", s ^. onComponentDidUpdate . to JE.toJS)
         ]
 
 render :: Monad m => G.WindowT GModel (R.ReactMlT m) ()
 render = do
     s <- ask
-    lift $ R.bh (JE.strval "li") [ ("className", classNames [ ("completed", s ^. completed)
+    lift $ R.bh (JE.strJS "li") [ ("className", classNames [ ("completed", s ^. completed)
                                                             , ("editing", s ^. editing)])
                                  ] $ do
-        R.bh (JE.strval "div") [ ("key", JE.strval "view")
-                               , ("className", JE.strval "view")
+        R.bh (JE.strJS "div") [ ("key", JE.strJS "view")
+                               , ("className", JE.strJS "view")
                                ] $ do
-            R.lf (JE.strval "input") [ ("key", JE.strval "toggle")
-                                    , ("className", JE.strval "toggle")
-                                    , ("type", JE.strval "checkbox")
-                                    , ("checked", s ^. completed . to J.pToJSVal)
-                                    , ("onChange", s ^. fireToggleComplete . to J.jsval)
+            R.lf (JE.strJS "input") [ ("key", JE.strJS "toggle")
+                                    , ("className", JE.strJS "toggle")
+                                    , ("type", JE.strJS "checkbox")
+                                    , ("checked", s ^. completed . to JE.toJS)
+                                    , ("onChange", s ^. fireToggleComplete . to JE.toJS)
                                     ]
-            R.bh (JE.strval "label")  [ ("key", JE.strval "label")
-                                      , ("onDoubleClick", s ^. fireStartEdit. to J.jsval)
+            R.bh (JE.strJS "label")  [ ("key", JE.strJS "label")
+                                      , ("onDoubleClick", s ^. fireStartEdit. to JE.toJS)
                                       ] (s ^. value . to R.txt)
-            R.lf (JE.strval "button") [ ("key", JE.strval "destroy")
-                                      , ("className", JE.strval "destroy")
-                                      , ("onClick", s ^. fireDestroy . to J.jsval)
+            R.lf (JE.strJS "button") [ ("key", JE.strJS "destroy")
+                                      , ("className", JE.strJS "destroy")
+                                      , ("onClick", s ^. fireDestroy . to JE.toJS)
                                       ]
         -- For uncontrolled components, we need to generate a new key per render
         -- in order for react to use the new defaultValue
-        R.lf (JE.strval "input") [ ("key", J.jsval $ J.unwords
+        R.lf (JE.strJS "input") [ ("key", JE.toJS $ J.unwords
                                        [ s ^. uid
                                        , s ^. frameNum . to show . to J.pack
                                        ])
-                                , ("ref", s ^.  onEditRef . to J.jsval)
-                                , ("className", JE.strval "edit")
-                                , ("defaultValue", s ^. value . to J.jsval)
-                                , ("defaultChecked", s ^. completed . to J.pToJSVal)
-                                , ("onBlur", s ^. fireCancelEdit . to J.jsval)
-                                , ("onKeyDown", s ^. onEditKeyDown . to J.jsval)
+                                , ("ref", s ^.  onEditRef . to JE.toJS)
+                                , ("className", JE.strJS "edit")
+                                , ("defaultValue", s ^. value . to JE.toJS)
+                                , ("defaultChecked", s ^. completed . to JE.toJS)
+                                , ("onBlur", s ^. fireCancelEdit . to JE.toJS)
+                                , ("onKeyDown", s ^. onEditKeyDown . to JE.toJS)
                                 ]
 
 classNames :: [(J.JSString, Bool)] -> J.JSVal
-classNames = J.jsval . J.unwords . fmap fst . filter snd
+classNames = JE.toJS . J.unwords . fmap fst . filter snd
 
 onEditKeyDown' :: J.JSVal -> MaybeT IO [Action]
 onEditKeyDown' = R.eventHandlerM W.Input.whenKeyDown goLazy
   where
     goLazy :: (Maybe J.JSString, J.JSVal) -> MaybeT IO [Action]
     goLazy (ms, j) = pure $
-        SendCommandsAction [SetPropertyCommand ("value", J.pToJSVal J.empty) j]
+        SendCommandsAction [SetPropertyCommand ("value", JE.toJS J.empty) j]
         : maybe [CancelEditAction] (pure . SubmitAction) ms
 
 gadget :: Monad m => G.GadgetT Action SuperModel m (D.DList Command)

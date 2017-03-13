@@ -1,7 +1,15 @@
 SHELL := /bin/bash
 PROJECT_ROOT:=$(shell stack path --project-root)
+INSTALL_ROOT := $(shell stack --stack-yaml $(PROJECT_ROOT)/stack.ghcjs.yaml path --local-install-root)
+GHCJS_OUT:=$(INSTALL_ROOT)/bin/glazier-react-todo.jsexe
 
-.PHONY: all install install-min paths clean start build
+$(PROJECT_ROOT)/stack.ghcjs.yaml: $(PROJECT_ROOT)/stack.yaml  $(PROJECT_ROOT)/ghcjs.yaml
+	cat $(PROJECT_ROOT)/stack.yaml $(PROJECT_ROOT)/ghcjs.yaml > $(PROJECT_ROOT)/stack.ghcjs.yaml
+	# set the same variables as above
+	$(eval INSTALL_ROOT := $(shell stack --stack-yaml $(PROJECT_ROOT)/stack.ghcjs.yaml path --local-install-root))
+	$(eval GHCJS_OUT:=$(INSTALL_ROOT)/bin/glazier-react-todo.jsexe)
+
+.PHONY: all install install-min clean start build
 
 all: install
 	@true # dependency tracking doesn't work for empty @targets
@@ -23,15 +31,8 @@ clean:
 start: install
 	npm start
 
-paths: $(PROJECT_ROOT)/stack.ghcjs.yaml
-	$(eval INSTALL_ROOT := $(shell stack --stack-yaml $(PROJECT_ROOT)/stack.ghcjs.yaml path --local-install-root))
-	$(eval GHCJS_OUT:=$(INSTALL_ROOT)/bin/glazier-react-todo.jsexe)
-
 build: $(PROJECT_ROOT)/stack.ghcjs.yaml
 	stack build --stack-yaml $(PROJECT_ROOT)/stack.ghcjs.yaml
-
-$(PROJECT_ROOT)/stack.ghcjs.yaml: $(PROJECT_ROOT)/stack.yaml  $(PROJECT_ROOT)/ghcjs.yaml
-	cat $(PROJECT_ROOT)/stack.yaml $(PROJECT_ROOT)/ghcjs.yaml > $(PROJECT_ROOT)/stack.ghcjs.yaml
 
 $(GHCJS_OUT)/all.js: build
 	@true # dependency tracking doesn't work for empty @targets
@@ -46,7 +47,7 @@ $(GHCJS_OUT)/all.js.externs: build
 # "ERROR - Closure dependency methods(goog.provide, goog.require, etc)
 # must be called at file scope. "
 # This step also removes the dummy calls to goog.provide and goog.require.
-build/todo.js: paths $(GHCJS_OUT)/all.js haskell/jsexports/exports.header haskell/jsexports/exports.js
+build/todo.js: $(GHCJS_OUT)/all.js haskell/jsexports/exports.header haskell/jsexports/exports.js
 	mkdir -p build
 	cat haskell/jsexports/exports.header \
 		<(sed -e '/goog.provide.*/d;/goog.require.*/d' $(GHCJS_OUT)/all.js) \

@@ -38,7 +38,6 @@ import qualified Data.JSString as J
 import qualified GHC.Generics as G
 import qualified GHCJS.Foreign.Callback as J
 import qualified GHCJS.Marshal as J
-import qualified GHCJS.Marshal.Pure as J
 import qualified GHCJS.Types as J
 import qualified Glazier as G
 import qualified Glazier.React.Command as R
@@ -123,54 +122,54 @@ instance HasModel (R.SuperModel Gasket Model) where
 window :: Monad m => G.WindowT GModel (R.ReactMlT m) ()
 window = do
     s <- ask
-    lift $ R.lf (s ^. component . to J.pToJSVal)
-        [ ("key",  s ^. uid . to J.pToJSVal)
-        , ("render", s ^. onRender . to JE.PureJSVal . to J.pToJSVal)
-        , ("ref", s ^. onComponentRef . to JE.PureJSVal . to J.pToJSVal)
+    lift $ R.lf (s ^. component . to JE.toJS)
+        [ ("key",  s ^. uid . to JE.toJS)
+        , ("render", s ^. onRender . to JE.toJS)
+        , ("ref", s ^. onComponentRef . to JE.toJS)
         ]
 
 render :: Monad m => G.WindowT GModel (R.ReactMlT m) ()
 render = do
     s <- ask
-    lift $ R.bh (JE.strval "footer") [("className", JE.strval "footer")] $ do
-        R.bh (JE.strval "span") [ ("className", JE.strval "todo-count")
-                                , ("key", JE.strval "todo-count")] $ do
-            R.bh (JE.strval "strong") [("key", JE.strval "items")] (s ^. activeCount . to show . to J.pack . to R.txt)
+    lift $ R.bh (JE.strJS "footer") [("className", JE.strJS "footer")] $ do
+        R.bh (JE.strJS "span") [ ("className", JE.strJS "todo-count")
+                                , ("key", JE.strJS "todo-count")] $ do
+            R.bh (JE.strJS "strong") [("key", JE.strJS "items")] (s ^. activeCount . to show . to J.pack . to R.txt)
             R.txt " items left"
-        R.bh (JE.strval "ul") [("className", JE.strval "filters")
-                              , ("key", JE.strval "filters")] $ do
-            R.bh (JE.strval "li") [("key", JE.strval "filter-all")] $
-                R.bh (JE.strval "a")
-                [ ("href", JE.strval "#/")
-                , ("key", JE.strval "all")
+        R.bh (JE.strJS "ul") [("className", JE.strJS "filters")
+                              , ("key", JE.strJS "filters")] $ do
+            R.bh (JE.strJS "li") [("key", JE.strJS "filter-all")] $
+                R.bh (JE.strJS "a")
+                [ ("href", JE.strJS "#/")
+                , ("key", JE.strJS "all")
                 , ("className", classNames [("selected", s ^. filter == TD.Filter.All)])
                 ] $
                 R.txt "All"
             (R.txt " ")
-            R.bh (JE.strval "li") [("key", JE.strval "filter-active")] $
-                R.bh (JE.strval "a")
-                [ ("href", JE.strval "#/active")
-                , ("key", JE.strval "active")
+            R.bh (JE.strJS "li") [("key", JE.strJS "filter-active")] $
+                R.bh (JE.strJS "a")
+                [ ("href", JE.strJS "#/active")
+                , ("key", JE.strJS "active")
                 , ("className", classNames [("selected", s ^. filter == TD.Filter.Active)])
                 ] $
                 R.txt "Active"
             (R.txt " ")
-            R.bh (JE.strval "li") [("key", JE.strval "filter-completed")] $
-                R.bh (JE.strval "a")
-                [ ("href", JE.strval "#/completed")
-                , ("key", JE.strval "completed")
+            R.bh (JE.strJS "li") [("key", JE.strJS "filter-completed")] $
+                R.bh (JE.strJS "a")
+                [ ("href", JE.strJS "#/completed")
+                , ("key", JE.strJS "completed")
                 , ("className", classNames [("selected", s ^. filter == TD.Filter.Completed)])
                 ] $
                 R.txt "Completed"
         if (s ^. completedCount > 0)
-           then R.bh (JE.strval "button")  [("key", JE.strval "clear-completed")
-                                          , ("className", JE.strval "clear-completed")
-                                          , ("onClick", s ^. fireClearCompleted . to J.jsval)] $
+           then R.bh (JE.strJS "button")  [("key", JE.strJS "clear-completed")
+                                          , ("className", JE.strJS "clear-completed")
+                                          , ("onClick", s ^. fireClearCompleted . to JE.toJS)] $
                 (R.txt "Clear completed")
            else mempty
 
 classNames :: [(J.JSString, Bool)] -> J.JSVal
-classNames = J.jsval . J.unwords . fmap fst . P.filter snd
+classNames = JE.toJS . J.unwords . fmap fst . P.filter snd
 
 gadget :: Monad m => G.GadgetT Action SuperModel m (D.DList Command)
 gadget = do
@@ -203,7 +202,7 @@ onHashChange = R.eventHandlerM whenHashChange withHashChange
 -- needs to combine other widgets that also uses hashchange event
 whenHashChange :: J.JSVal -> MaybeT IO J.JSString
 whenHashChange evt = do
-    newURL <- MaybeT (JE.getProperty "newURL" evt >>= J.fromJSVal)
+    newURL <- MaybeT (JE.getProperty "newURL" evt >>= J.fromJSVal) -- FIXME: Use Nullable?
     let (_, newHash) = J.breakOn "#" newURL
     pure newHash
 
