@@ -230,7 +230,10 @@ gadget = do
             let str' = J.strip str
             cmds' <- if J.null str'
                 then pure mempty
-                else pure $ D.singleton $ SendActionsCommand [TodosAction $ W.List.MakeItemAction (+ 1) (toTodoModel str')]
+                else pure . D.singleton $ SendActionsCommand [TodosAction $ W.List.MakeItemAction
+                                                                 (+ 1)
+                                                                 (pure . toTodoModel str')
+                                                             ]
             pure $ cmds `mappend` cmds'
 
         InputAction _ -> inputGadget

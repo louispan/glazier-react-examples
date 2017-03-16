@@ -3,16 +3,16 @@ PROJECT_ROOT:=$(shell stack path --project-root)
 INSTALL_ROOT := $(shell stack --stack-yaml $(PROJECT_ROOT)/stack.ghcjs.yaml path --local-install-root)
 GHCJS_OUT:=$(INSTALL_ROOT)/bin/glazier-react-todo.jsexe
 
+.PHONY: all install install-min clean start build
+
+all: install
+	@true # dependency tracking doesn't work for empty @targets
+
 $(PROJECT_ROOT)/stack.ghcjs.yaml: $(PROJECT_ROOT)/stack.yaml  $(PROJECT_ROOT)/ghcjs.yaml
 	cat $(PROJECT_ROOT)/stack.yaml $(PROJECT_ROOT)/ghcjs.yaml > $(PROJECT_ROOT)/stack.ghcjs.yaml
 	# set the same variables as above
 	$(eval INSTALL_ROOT := $(shell stack --stack-yaml $(PROJECT_ROOT)/stack.ghcjs.yaml path --local-install-root))
 	$(eval GHCJS_OUT:=$(INSTALL_ROOT)/bin/glazier-react-todo.jsexe)
-
-.PHONY: all install install-min clean start build
-
-all: install
-	@true # dependency tracking doesn't work for empty @targets
 
 # install: build/todo.js build/todo.min.js
 # 	npm install
