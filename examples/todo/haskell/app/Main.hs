@@ -85,7 +85,7 @@ main = do
 
     -- Start the App render
     root <- js_getElementById "root"
-    e <- R.markedElement TD.App.window (s ^. R.gModel)
+    e <- R.markedElement TD.App.window (s ^. R.design)
     RD.render (J.pToJSVal e) root
 
     -- The footer uses uses hashChange to fire events

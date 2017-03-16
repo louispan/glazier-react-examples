@@ -12,15 +12,15 @@ module Todo.App
     , Command(..)
     , Action(..)
     , AsAction(..)
-    , Gasket(..)
-    , HasGasket(..)
-    , mkGasket
+    , Plan(..)
+    , HasPlan(..)
+    , mkPlan
     , Model(..)
     , HasModel(..)
     , mkSuperModel
     , Widget
-    , GModel
-    , MModel
+    , Design
+    , Replica
     , SuperModel
     , window
     , gadget
@@ -54,7 +54,7 @@ import qualified Todo.Filter as TD.Filter
 type TodosKey = Int
 
 data Command
-    = RenderCommand (R.SuperModel Gasket Model) [JE.Property] J.JSVal
+    = RenderCommand (R.SuperModel Model Plan) [JE.Property] J.JSVal
     | SendActionsCommand [Action]
     | InputCommand (W.Input.Command Action)
     | TodosCommand (W.List.Command TodosKey TD.Todo.Widget)
@@ -77,7 +77,7 @@ data Model = Model
     , _footer :: R.WidgetSuperModel TD.Footer.Widget
     }
 
-data Gasket = Gasket
+data Plan = Plan
     { _component :: R.ReactComponent
     , _onRender ::  J.Callback (J.JSVal -> IO J.JSVal)
     , _onComponentRef :: J.Callback (J.JSVal -> IO ())
@@ -85,11 +85,11 @@ data Gasket = Gasket
     } deriving (G.Generic)
 
 makeClassyPrisms ''Action
-makeClassy ''Gasket
+makeClassy ''Plan
 makeClassy ''Model
 
-mkGasket :: (R.MModel Gasket Model) -> F (R.Maker Action) Gasket
-mkGasket mm = Gasket
+mkPlan :: (R.Replica Model Plan) -> F (R.Maker Action) Plan
+mkPlan mm = Plan
     <$> R.getComponent
     <*> (R.mkRenderer mm (const render))
     <*> (R.mkHandler $ pure . pure . ComponentRefAction)
@@ -109,7 +109,7 @@ mkSuperModel
         -> R.WidgetSuperModel TD.Footer.Widget
         -> Model
        )
-    -> F (R.Maker Action) (R.SuperModel Gasket Model)
+    -> F (R.Maker Action) (R.SuperModel Model Plan)
 mkSuperModel inputModel todosModel footerModel f = do
     inputSuperModel <- hoistF (R.mapAction $ review _InputAction) $
         W.Input.mkSuperModel inputModel
@@ -117,29 +117,29 @@ mkSuperModel inputModel todosModel footerModel f = do
         W.List.mkSuperModel TD.Todo.window mempty todosModel
     footerSuperModel <- hoistF (R.mapAction $ review _FooterAction) $
         TD.Footer.mkSuperModel footerModel
-    R.mkSuperModel mkGasket $ \gsk -> R.GModel gsk (f inputSuperModel todosSuperModel footerSuperModel)
+    R.mkSuperModel mkPlan (R.Design (f inputSuperModel todosSuperModel footerSuperModel))
 
 data Widget
 instance R.IsWidget Widget where
     type WidgetAction Widget = Action
     type WidgetCommand Widget = Command
     type WidgetModel Widget = Model
-    type WidgetGasket Widget = Gasket
-type GModel = R.WidgetGModel Widget
-type MModel = R.WidgetMModel Widget
+    type WidgetPlan Widget = Plan
+type Design = R.WidgetDesign Widget
+type Replica = R.WidgetReplica Widget
 type SuperModel = R.WidgetSuperModel Widget
 
 ----------------------------------------------------------
 -- The following should be the same per widget (except for type params)
-instance CD.Disposing Gasket
-instance HasGasket (R.GModel Gasket Model) where
-    gasket = R.widgetGasket
-instance HasModel (R.GModel Gasket Model) where
+instance CD.Disposing Plan
+instance HasPlan (R.Design Model Plan) where
+    plan = R.widgetPlan
+instance HasModel (R.Design Model Plan) where
     model = R.widgetModel
-instance HasGasket (R.SuperModel Gasket Model) where
-    gasket = R.gModel . gasket
-instance HasModel (R.SuperModel Gasket Model) where
-    model = R.gModel . model
+instance HasPlan (R.SuperModel Model Plan) where
+    plan = R.design . plan
+instance HasModel (R.SuperModel Model Plan) where
+    model = R.design . model
 -- End same code per widget
 ----------------------------------------------------------
 
@@ -150,7 +150,7 @@ isActiveTodo :: TD.Todo.SuperModel -> Bool
 isActiveTodo = view (TD.Todo.model . TD.Todo.completed . to not)
 
 -- | This is used by parent components to render this component
-window :: Monad m => G.WindowT GModel (R.ReactMlT m) ()
+window :: Monad m => G.WindowT Design (R.ReactMlT m) ()
 window = do
     s <- ask
     lift $ R.lf (s ^. component . to JE.toJS)
@@ -160,7 +160,7 @@ window = do
         ]
 
 -- | This is used by the React render callback
-render :: Monad m => G.WindowT GModel (R.ReactMlT m) ()
+render :: Monad m => G.WindowT Design (R.ReactMlT m) ()
 render = do
     s <- ask
     lift $ R.bh (JE.strJS "header") [("className", JE.strJS "header")] $ do
@@ -168,7 +168,7 @@ render = do
         view G._WindowT inputWindow s
         view G._WindowT mainWindow s
 
-mainWindow :: Monad m => G.WindowT GModel (R.ReactMlT m) ()
+mainWindow :: Monad m => G.WindowT Design (R.ReactMlT m) ()
 mainWindow = do
     -- only render if there are todos
     ts <- view (todos . W.List.itemsModel)
@@ -193,14 +193,14 @@ mainWindow = do
             -- Render the footer
             view G._WindowT footerWindow s
 
-inputWindow :: Monad m => G.WindowT GModel (R.ReactMlT m) ()
-inputWindow = magnify (input . R.gModel) W.Input.window
+inputWindow :: Monad m => G.WindowT Design (R.ReactMlT m) ()
+inputWindow = magnify (input . R.design) W.Input.window
 
-todoListWindow :: Monad m => G.WindowT GModel (R.ReactMlT m) ()
-todoListWindow = magnify (todos . R.gModel) W.List.window
+todoListWindow :: Monad m => G.WindowT Design (R.ReactMlT m) ()
+todoListWindow = magnify (todos . R.design) W.List.window
 
-footerWindow :: Monad m => G.WindowT GModel (R.ReactMlT m) ()
-footerWindow = magnify (footer . R.gModel) TD.Footer.window
+footerWindow :: Monad m => G.WindowT Design (R.ReactMlT m) ()
+footerWindow = magnify (footer . R.design) TD.Footer.window
 
 updateFooterGadget :: Monad m => G.GadgetT Action SuperModel m (D.DList Command)
 updateFooterGadget = do
