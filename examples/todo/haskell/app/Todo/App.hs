@@ -206,7 +206,7 @@ gadget = do
             s <- use (todos . W.List.itemsModel)
             let b = hasActiveTodos s
             let acts = M.foldMapWithKey (toggleCompleteAll b) s
-            pure $ D.singleton $ SendActionsCommand $ D.toList $ acts
+            pure $ D.singleton $ SendActionsCommand $ D.toList $ acts `D.snoc` TodosAction W.List.RenderAction
 
         InputAction (W.Input.SubmitAction str) -> do
             cmds <- inputGadget

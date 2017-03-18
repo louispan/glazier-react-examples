@@ -27,7 +27,9 @@ install-min: .build/todo.min.js
 
 install-prod: install-min
 	npm run build
-	@true # dependency tracking doesn't work for empty @targets
+
+deploy-prod: install-prod
+	npm run deploy
 
 clean:
 	rm -rf node_modules
