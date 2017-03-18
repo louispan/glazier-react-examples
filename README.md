@@ -1,17 +1,8 @@
-# installation dependecies
-* stack
-* node
- - This gives the npm package manager.
- - node is required for ghcjs anyway.
+# Glazier.React examples
 
-* todo example
-```
-cd examples/todo
-make start
-```
-NB. the examples/todo was created using the skeleton from
-https://facebook.github.io/react/docs/installation.html, by running:
-```
-npm install -g create-react-app
-create-react-app todo
-```
+## TodoMVC
+This is a fully featured TodoMVC in in Haskell and ReactJS using the [glazier-react](https://github.com/louispan/glazier-react) library.
+
+For a live demo, see https://louispan.github.io/glazier-react-examples/
+
+For more details, see the [todo example README.md](https://github.com/louispan/glazier-react-examples/tree/master/examples/todo)
