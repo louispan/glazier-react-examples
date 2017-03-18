@@ -30,7 +30,7 @@ run _ output (SendActionsCommand acts) =
     void $ runMaybeT $
     traverse_ (\act -> lift $ atomically $ PC.send output act >>= guard) acts
 
-run _ output (InputCommand cmd) = W.Input.run output cmd
+run _ _ (InputCommand cmd) = W.Input.run cmd
 
 run comp output (TodosCommand cmd) =
     W.List.run

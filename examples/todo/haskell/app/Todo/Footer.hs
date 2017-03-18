@@ -16,11 +16,11 @@ module Todo.Footer
     , mkPlan
     , Model(..)
     , HasModel(..)
-    , mkSuperModel
-    , Widget
     , Design
-    , Replica
+    , Frame
     , SuperModel
+    , Widget
+    , widget
     , window
     , gadget
     , onHashChange
@@ -45,6 +45,7 @@ import qualified Glazier.React.Component as R
 import qualified Glazier.React.Event as R
 import qualified Glazier.React.Maker as R
 import qualified Glazier.React.Markup as R
+import qualified Glazier.React.Model as R
 import qualified Glazier.React.Widget as R
 import qualified JavaScript.Extras as JE
 import Prelude hiding (filter)
@@ -70,6 +71,9 @@ data Model = Model
     , _filter :: TD.Filter.Filter
     }
 
+instance CD.Disposing Model where
+    disposing _ = CD.DisposeNone
+
 data Plan = Plan
     { _component :: R.ReactComponent
     , _onRender :: J.Callback (J.JSVal -> IO J.JSVal)
@@ -77,49 +81,41 @@ data Plan = Plan
     , _fireClearCompleted :: J.Callback (J.JSVal -> IO ())
     } deriving G.Generic
 
+instance CD.Disposing Plan
 makeClassyPrisms ''Action
 makeClassy ''Plan
 makeClassy ''Model
 
-mkPlan :: R.Replica Model Plan -> F (R.Maker Action) Plan
+mkPlan :: R.Frame Model Plan -> F (R.Maker Action) Plan
 mkPlan mm = Plan
     <$> R.getComponent
     <*> (R.mkRenderer mm $ const render)
     <*> (R.mkHandler $ pure . pure . ComponentRefAction)
     <*> (R.mkHandler $ pure . pure . const ClearCompletedAction)
 
-instance CD.Disposing Model where
-    disposing _ = CD.DisposeNone
-
-mkSuperModel :: Model -> F (R.Maker Action) SuperModel
-mkSuperModel mdl = R.mkSuperModel mkPlan (R.Design mdl)
-
-data Widget
-instance R.IsWidget Widget where
-    type WidgetAction Widget = Action
-    type WidgetCommand Widget = Command
-    type WidgetModel Widget = Model
-    type WidgetPlan Widget = Plan
-type Design = R.WidgetDesign Widget
-type Replica = R.WidgetReplica Widget
-type SuperModel = R.WidgetSuperModel Widget
-
-----------------------------------------------------------
--- The following should be the same per widget (except for type params)
-instance CD.Disposing Plan
+-- Link Glazier.React.Model's HasPlan/HasModel with this widget's HasPlan/HasModel from makeClassy
 instance HasPlan (R.Design Model Plan) where
-    plan = R.widgetPlan
+    plan = R.plan
 instance HasModel (R.Design Model Plan) where
-    model = R.widgetModel
+    model = R.model
 instance HasPlan (R.SuperModel Model Plan) where
     plan = R.design . plan
 instance HasModel (R.SuperModel Model Plan) where
     model = R.design . model
--- End same code per widget
-----------------------------------------------------------
+
+type Design = R.Design Model Plan
+type Frame = R.Frame Model Plan
+type SuperModel = R.SuperModel Model Plan
+
+type Widget = R.Widget Command Action Model Plan
+widget :: R.Widget Command Action Model Plan
+widget = R.Widget
+    mkPlan
+    window
+    gadget
 
 -- | This is used by parent components to render this component
-window :: Monad m => G.WindowT Design (R.ReactMlT m) ()
+window :: G.WindowT (R.Design Model Plan) (R.ReactMlT Identity) ()
 window = do
     s <- ask
     lift $ R.lf (s ^. component . to JE.toJS)
@@ -128,7 +124,7 @@ window = do
         , ("ref", s ^. onComponentRef . to JE.toJS)
         ]
 
-render :: Monad m => G.WindowT Design (R.ReactMlT m) ()
+render :: G.WindowT (R.Design Model Plan) (R.ReactMlT Identity) ()
 render = do
     s <- ask
     lift $ R.bh (JE.strJS "footer") [("className", JE.strJS "footer")] $ do
@@ -171,7 +167,7 @@ render = do
 classNames :: [(J.JSString, Bool)] -> J.JSVal
 classNames = JE.toJS . J.unwords . fmap fst . P.filter snd
 
-gadget :: Monad m => G.GadgetT Action SuperModel m (D.DList Command)
+gadget :: G.GadgetT Action (R.SuperModel Model Plan) Identity (D.DList Command)
 gadget = do
     a <- ask
     case a of

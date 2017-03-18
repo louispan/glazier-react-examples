@@ -22,9 +22,10 @@ import qualified GHCJS.Marshal.Pure as J
 import qualified GHCJS.Types as J
 import qualified Glazier as G
 import qualified Glazier.React.Component as R
-import qualified Glazier.React.Maker as R.Maker
+import qualified Glazier.React.Maker as R
 import qualified Glazier.React.Maker.Run as R.Maker
 import qualified Glazier.React.Markup as R
+import qualified Glazier.React.Model as R
 import qualified Glazier.React.ReactDOM as RD
 import qualified Glazier.React.Widget as R
 import qualified Glazier.React.Widgets.Input as W.Input
@@ -37,7 +38,38 @@ import qualified Pipes.Prelude as PP
 import qualified Todo.App as TD.App
 import qualified Todo.App.Run as TD.App
 import qualified Todo.Footer as TD.Footer
+import qualified Todo.Todo as TD.Todo
 import qualified Todo.Filter as TD.Filter
+
+mkAppModel :: F (R.Maker TD.App.Action) TD.App.Model
+mkAppModel = TD.App.Model
+    <$> (pure "todos")
+    <*> (pure J.nullRef)
+    <*> (pure 0)
+    <*> (hoistF (R.mapAction TD.App.InputAction) $ R.mkSuperModel W.Input.widget $
+         W.Input.Model
+            "newtodo"
+            J.nullRef
+            "What needs to be done?"
+            "new-todo")
+    <*> (hoistF (R.mapAction TD.App.TodosAction) $ R.mkSuperModel (W.List.widget mempty TD.Todo.widget) $
+         W.List.Model
+            "todo-list"
+            J.nullRef
+            0
+            mempty
+            "todo-list"
+            0
+            mempty
+            (const True))
+    <*> (hoistF (R.mapAction TD.App.FooterAction) $ R.mkSuperModel TD.Footer.widget $
+         TD.Footer.Model
+            "footer"
+            J.nullRef
+            0
+            0
+            0
+            TD.Filter.All)
 
 -- | 'main' is used to create React classes and setup callbacks to be used externally by the browser.
 -- GHCJS runs 'main' lazily.
@@ -53,50 +85,22 @@ main = do
     component <- R.mkComponent
 
     -- App Model
-    let inputModel = W.Input.Model
-            "newtodo"
-            J.nullRef
-            "What needs to be done?"
-            "new-todo"
-        todosModel = W.List.Model
-             "todo-list"
-             J.nullRef
-             0
-             mempty
-             "todo-list"
-             0
-             mempty
-             (const True)
-        footerModel = TD.Footer.Model
-            "footer"
-            J.nullRef
-            0
-            0
-            0
-            TD.Filter.All
-        mkAppModel inputSuperModel todosSuperModel footerSuperModel = TD.App.Model
-            "todos"
-            J.nullRef
-            0
-            inputSuperModel
-            todosSuperModel
-            footerSuperModel
-    s <- iterM (R.Maker.run component output) (TD.App.mkSuperModel inputModel todosModel footerModel mkAppModel)
+    s <- iterM (R.Maker.run component output) (mkAppModel >>= R.mkSuperModel TD.App.widget)
 
     -- Start the App render
     root <- js_getElementById "root"
-    e <- R.markedElement TD.App.window (s ^. R.design)
+    e <- R.markedElement (hoist (hoist generalize) TD.App.window) (s ^. R.design)
     RD.render (J.pToJSVal e) root
 
     -- The footer uses uses hashChange to fire events
     onHashChange' <- iterM (R.Maker.run component output)
-        (hoistF (R.Maker.mapAction $ review TD.App._FooterAction) (R.Maker.mkHandler TD.Footer.onHashChange))
+        (hoistF (R.mapAction TD.App.FooterAction) (R.mkHandler TD.Footer.onHashChange))
     js_addHashChangeListener onHashChange'
 
     -- Fire the initial hashChange action
     hash <- js_getHash
     void $ runMaybeT $ do
-        acts <- (fmap (review TD.App._FooterAction)) <$> TD.Footer.withHashChange hash
+        acts <- fmap TD.App.FooterAction <$> TD.Footer.withHashChange hash
         traverse_ (\act -> lift $ atomically $ PC.send output act >>= guard) acts
 
     -- Run the gadget effect which reads actions from 'Pipes.Concurrent.Input'
@@ -113,32 +117,37 @@ main = do
 
 appEffect
     :: MonadIO io
-    => TD.App.SuperModel
+    => R.SuperModelOf TD.App.Widget
     -> PC.Input TD.App.Action
     -> PC.Output TD.App.Action
     -> R.ReactComponent
-    -> P.Effect io TD.App.SuperModel
-appEffect s input output component = do
+    -> P.Effect io (R.SuperModelOf TD.App.Widget)
+appEffect s input output component =
     PL.execStateP s $
         appProducerIO input P.>->
         runCommandsPipe output component P.>->
         PP.drain
 
-appProducerIO :: MonadIO io => PC.Input TD.App.Action -> P.Producer' (D.DList TD.App.Command) (StateT TD.App.SuperModel io) ()
+appProducerIO
+    :: MonadIO io
+    => PC.Input TD.App.Action
+    -> P.Producer' (D.DList TD.App.Command) (StateT (R.SuperModelOf TD.App.Widget) io) ()
 appProducerIO input = hoist (hoist (liftIO . atomically)) (appProducer input)
 
-appProducer :: PC.Input TD.App.Action -> P.Producer' (D.DList TD.App.Command) (StateT TD.App.SuperModel STM) ()
-appProducer input = PM.execInput input (G.runGadgetT TD.App.gadget)
+appProducer
+    :: PC.Input TD.App.Action
+    -> P.Producer' (D.DList TD.App.Command) (StateT (R.SuperModelOf TD.App.Widget) STM) ()
+appProducer input = PM.execInput input (G.runGadgetT (hoist generalize TD.App.gadget))
 
 runCommandsPipe
-    :: (MonadState TD.App.SuperModel io, MonadIO io)
+    :: (MonadState (R.SuperModelOf TD.App.Widget) io, MonadIO io)
     => PC.Output TD.App.Action
     -> R.ReactComponent
     -> P.Pipe (D.DList TD.App.Command) () io ()
 runCommandsPipe output component = PP.mapM (runCommands output component)
 
 runCommands
-    :: (Foldable t, MonadState TD.App.SuperModel io, MonadIO io)
+    :: (Foldable t, MonadState (R.SuperModelOf TD.App.Widget) io, MonadIO io)
     => PC.Output TD.App.Action
     -> R.ReactComponent
     -> t TD.App.Command

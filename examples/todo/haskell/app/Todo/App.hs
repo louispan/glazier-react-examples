@@ -17,11 +17,11 @@ module Todo.App
     , mkPlan
     , Model(..)
     , HasModel(..)
-    , mkSuperModel
-    , Widget
     , Design
-    , Replica
+    , Frame
     , SuperModel
+    , Widget
+    , widget
     , window
     , gadget
     ) where
@@ -43,6 +43,7 @@ import qualified Glazier.React.Command as R
 import qualified Glazier.React.Component as R
 import qualified Glazier.React.Maker as R
 import qualified Glazier.React.Markup as R
+import qualified Glazier.React.Model as R
 import qualified Glazier.React.Widget as R
 import qualified Glazier.React.Widgets.Input as W.Input
 import qualified Glazier.React.Widgets.List as W.List
@@ -56,7 +57,7 @@ type TodosKey = Int
 data Command
     = RenderCommand (R.SuperModel Model Plan) [JE.Property] J.JSVal
     | SendActionsCommand [Action]
-    | InputCommand (W.Input.Command Action)
+    | InputCommand W.Input.Command
     | TodosCommand (W.List.Command TodosKey TD.Todo.Widget)
     | FooterCommand TD.Footer.Command
 
@@ -64,17 +65,18 @@ data Action
     = ComponentRefAction J.JSVal
     | RenderAction
     | ToggleCompleteAllAction
-    | InputAction (W.Input.Action Action)
+    | InputAction W.Input.Action
     | TodosAction (W.List.Action TodosKey TD.Todo.Widget)
     | FooterAction TD.Footer.Action
+
 
 data Model = Model
     { _uid :: J.JSString
     , _componentRef :: J.JSVal
     , _frameNum :: Int
-    , _input :: R.WidgetSuperModel (W.Input.Widget Action)
-    , _todos :: R.WidgetSuperModel (W.List.Widget TodosKey TD.Todo.Widget)
-    , _footer :: R.WidgetSuperModel TD.Footer.Widget
+    , _input :: R.SuperModelOf W.Input.Widget
+    , _todos :: R.SuperModelOf (W.List.Widget TodosKey TD.Todo.Widget)
+    , _footer :: R.SuperModelOf TD.Footer.Widget
     }
 
 data Plan = Plan
@@ -85,72 +87,53 @@ data Plan = Plan
     } deriving (G.Generic)
 
 makeClassyPrisms ''Action
-makeClassy ''Plan
 makeClassy ''Model
+makeClassy ''Plan
 
-mkPlan :: (R.Replica Model Plan) -> F (R.Maker Action) Plan
+mkPlan :: R.Frame Model Plan -> F (R.Maker Action) Plan
 mkPlan mm = Plan
     <$> R.getComponent
     <*> (R.mkRenderer mm (const render))
     <*> (R.mkHandler $ pure . pure . ComponentRefAction)
     <*> (R.mkHandler $ pure . pure . const ToggleCompleteAllAction)
 
+instance CD.Disposing Plan
 instance CD.Disposing Model where
     disposing s = CD.DisposeList $
         CD.disposing (s ^. input)
         : foldr ((:) . CD.disposing) [] (s ^. (todos . W.List.itemsModel))
 
-mkSuperModel
-    :: W.Input.Model
-    -> W.List.Model TodosKey TD.Todo.Widget
-    -> TD.Footer.Model
-    -> (R.WidgetSuperModel (W.Input.Widget Action)
-        -> R.WidgetSuperModel (W.List.Widget TodosKey TD.Todo.Widget)
-        -> R.WidgetSuperModel TD.Footer.Widget
-        -> Model
-       )
-    -> F (R.Maker Action) (R.SuperModel Model Plan)
-mkSuperModel inputModel todosModel footerModel f = do
-    inputSuperModel <- hoistF (R.mapAction $ review _InputAction) $
-        W.Input.mkSuperModel inputModel
-    todosSuperModel <- hoistF (R.mapAction $ review _TodosAction) $
-        W.List.mkSuperModel TD.Todo.window mempty todosModel
-    footerSuperModel <- hoistF (R.mapAction $ review _FooterAction) $
-        TD.Footer.mkSuperModel footerModel
-    R.mkSuperModel mkPlan (R.Design (f inputSuperModel todosSuperModel footerSuperModel))
-
-data Widget
-instance R.IsWidget Widget where
-    type WidgetAction Widget = Action
-    type WidgetCommand Widget = Command
-    type WidgetModel Widget = Model
-    type WidgetPlan Widget = Plan
-type Design = R.WidgetDesign Widget
-type Replica = R.WidgetReplica Widget
-type SuperModel = R.WidgetSuperModel Widget
-
-----------------------------------------------------------
--- The following should be the same per widget (except for type params)
-instance CD.Disposing Plan
+-- Link Glazier.React.Model's HasPlan/HasModel with this widget's HasPlan/HasModel from makeClassy
 instance HasPlan (R.Design Model Plan) where
-    plan = R.widgetPlan
+    plan = R.plan
 instance HasModel (R.Design Model Plan) where
-    model = R.widgetModel
+    model = R.model
 instance HasPlan (R.SuperModel Model Plan) where
     plan = R.design . plan
 instance HasModel (R.SuperModel Model Plan) where
     model = R.design . model
--- End same code per widget
+
+type Design = R.Design Model Plan
+type Frame = R.Frame Model Plan
+type SuperModel = R.SuperModel Model Plan
+
 ----------------------------------------------------------
 
-hasActiveTodos :: M.Map TodosKey TD.Todo.SuperModel -> Bool
+type Widget = R.Widget Command Action Model Plan
+widget :: R.Widget Command Action Model Plan
+widget = R.Widget
+    mkPlan
+    window
+    gadget
+
+hasActiveTodos :: M.Map TodosKey (R.SuperModelOf TD.Todo.Widget) -> Bool
 hasActiveTodos = getAny . foldMap (Any . isActiveTodo)
 
-isActiveTodo :: TD.Todo.SuperModel -> Bool
+isActiveTodo :: (R.SuperModelOf TD.Todo.Widget) -> Bool
 isActiveTodo = view (TD.Todo.model . TD.Todo.completed . to not)
 
 -- | This is used by parent components to render this component
-window :: Monad m => G.WindowT Design (R.ReactMlT m) ()
+window :: G.WindowT (R.Design Model Plan) (R.ReactMlT Identity) ()
 window = do
     s <- ask
     lift $ R.lf (s ^. component . to JE.toJS)
@@ -160,7 +143,7 @@ window = do
         ]
 
 -- | This is used by the React render callback
-render :: Monad m => G.WindowT Design (R.ReactMlT m) ()
+render :: G.WindowT (R.Design Model Plan) (R.ReactMlT Identity) ()
 render = do
     s <- ask
     lift $ R.bh (JE.strJS "header") [("className", JE.strJS "header")] $ do
@@ -168,11 +151,11 @@ render = do
         view G._WindowT inputWindow s
         view G._WindowT mainWindow s
 
-mainWindow :: Monad m => G.WindowT Design (R.ReactMlT m) ()
+mainWindow :: G.WindowT (R.Design Model Plan) (R.ReactMlT Identity) ()
 mainWindow = do
     -- only render if there are todos
     ts <- view (todos . W.List.itemsModel)
-    if (null ts)
+    if null ts
         then pure ()
         else do
         s <- ask
@@ -193,22 +176,22 @@ mainWindow = do
             -- Render the footer
             view G._WindowT footerWindow s
 
-inputWindow :: Monad m => G.WindowT Design (R.ReactMlT m) ()
+inputWindow :: G.WindowT (R.Design Model Plan) (R.ReactMlT Identity) ()
 inputWindow = magnify (input . R.design) W.Input.window
 
-todoListWindow :: Monad m => G.WindowT Design (R.ReactMlT m) ()
+todoListWindow :: G.WindowT (R.Design Model Plan) (R.ReactMlT Identity) ()
 todoListWindow = magnify (todos . R.design) W.List.window
 
-footerWindow :: Monad m => G.WindowT Design (R.ReactMlT m) ()
+footerWindow :: G.WindowT (R.Design Model Plan) (R.ReactMlT Identity) ()
 footerWindow = magnify (footer . R.design) TD.Footer.window
 
-updateFooterGadget :: Monad m => G.GadgetT Action SuperModel m (D.DList Command)
+updateFooterGadget :: G.GadgetT Action (R.SuperModel Model Plan) Identity (D.DList Command)
 updateFooterGadget = do
     (active, completed) <- use (todos . W.List.itemsModel . to (M.partition isActiveTodo))
     pure $ D.singleton $ SendActionsCommand
                 [FooterAction $ TD.Footer.SetCountsAction (length active) (length completed)]
 
-gadget :: Monad m => G.GadgetT Action SuperModel m (D.DList Command)
+gadget :: G.GadgetT Action (R.SuperModel Model Plan) Identity (D.DList Command)
 gadget = do
     a <- ask
     case a of
@@ -305,21 +288,21 @@ gadget = do
     toggleCompleteAll
         :: Bool
         -> TodosKey
-        -> R.WidgetSuperModel TD.Todo.Widget
+        -> R.SuperModelOf TD.Todo.Widget
         -> D.DList Action
     toggleCompleteAll b k todoSuperModel =
         if (todoSuperModel ^. (TD.Todo.model . TD.Todo.completed) /= b)
             then D.singleton $ TodosAction $ W.List.ItemAction k (TD.Todo.SetCompletedAction b)
             else mempty
 
-inputGadget :: Monad m => G.GadgetT Action SuperModel m (D.DList Command)
+inputGadget :: G.GadgetT Action (R.SuperModel Model Plan) Identity (D.DList Command)
 inputGadget = fmap InputCommand <$> magnify _InputAction (zoom input W.Input.gadget)
 
-todosGadget :: Monad m => G.GadgetT Action SuperModel m (D.DList Command)
+todosGadget :: G.GadgetT Action (R.SuperModel Model Plan) Identity (D.DList Command)
 todosGadget = fmap TodosCommand <$> magnify _TodosAction (zoom todos
                                                          (W.List.gadget
-                                                         TD.Todo.mkSuperModel
+                                                         (R.mkSuperModel TD.Todo.widget)
                                                          TD.Todo.gadget))
 
-footerGadget :: Monad m => G.GadgetT Action SuperModel m (D.DList Command)
+footerGadget :: G.GadgetT Action (R.SuperModel Model Plan) Identity (D.DList Command)
 footerGadget = fmap FooterCommand <$> magnify _FooterAction (zoom footer TD.Footer.gadget)

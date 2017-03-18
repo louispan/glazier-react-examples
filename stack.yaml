@@ -59,8 +59,8 @@ extra-deps:
 - mmorph-1.0.9
 - disposable-0.2.0.0
 - javascript-extras-0.2.0.0
-- glazier-react-0.1
-- glazier-react-widget-0.1
+- glazier-react-0.3
+- glazier-react-widget-0.3
 - ghcjs-base-stub-0.1.0.2
 
 # Override default flag values for local packages and extra-deps
