@@ -6,6 +6,7 @@
 
 module Main (main) where
 
+import Control.Concurrent.MVar
 import Control.Concurrent.STM
 import qualified Control.Disposable as CD
 import Control.Lens
@@ -43,33 +44,33 @@ import qualified Todo.Filter as TD.Filter
 
 mkAppModel :: F (R.Maker TD.App.Action) TD.App.Model
 mkAppModel = TD.App.Model
-    <$> (pure "todos")
-    <*> (pure J.nullRef)
-    <*> (pure 0)
-    <*> (hoistF (R.mapAction TD.App.InputAction) $ R.mkSuperModel W.Input.widget $
+    <$> R.mkUid
+    <*> pure J.nullRef
+    <*> pure 0
+    <*> hoistF (R.mapAction TD.App.InputAction) (R.mkSuperModel W.Input.widget =<<
          W.Input.Model
-            "newtodo"
-            J.nullRef
-            "What needs to be done?"
-            "new-todo")
-    <*> (hoistF (R.mapAction TD.App.TodosAction) $ R.mkSuperModel (W.List.widget mempty TD.Todo.widget) $
+          <$> R.mkUid
+          <*> pure J.nullRef
+          <*> pure "What needs to be done?"
+          <*> pure "new-todo")
+    <*> hoistF (R.mapAction TD.App.TodosAction) (R.mkSuperModel (W.List.widget mempty TD.Todo.widget) =<<
          W.List.Model
-            "todo-list"
-            J.nullRef
-            0
-            mempty
-            "todo-list"
-            0
-            mempty
-            (const True))
-    <*> (hoistF (R.mapAction TD.App.FooterAction) $ R.mkSuperModel TD.Footer.widget $
+         <$> R.mkUid
+         <*> pure J.nullRef
+         <*> pure 0
+         <*> pure mempty
+         <*> pure "todo-list"
+         <*> pure 0
+         <*> pure mempty
+         <*> pure (const True))
+    <*> hoistF (R.mapAction TD.App.FooterAction) (R.mkSuperModel TD.Footer.widget =<<
          TD.Footer.Model
-            "footer"
-            J.nullRef
-            0
-            0
-            0
-            TD.Filter.All)
+         <$> R.mkUid
+         <*> pure J.nullRef
+         <*> pure 0
+         <*> pure 0
+         <*> pure 0
+         <*> pure TD.Filter.All)
 
 -- | 'main' is used to create React classes and setup callbacks to be used externally by the browser.
 -- GHCJS runs 'main' lazily.
@@ -82,18 +83,20 @@ main = do
     -- blocked events are kept by the GHCJCS runtime.
     (output, input) <- PC.spawn $ PC.unbounded
 
+    muid <- newMVar 0
+
     component <- R.mkComponent
 
     -- App Model
-    s <- iterM (R.Maker.run component output) (mkAppModel >>= R.mkSuperModel TD.App.widget)
+    s <- iterM (R.Maker.run muid component output) (mkAppModel >>= R.mkSuperModel TD.App.widget)
 
     -- Start the App render
     root <- js_getElementById "root"
     e <- R.markedElement (hoist (hoist generalize) TD.App.window) (s ^. R.design)
     RD.render (J.pToJSVal e) root
 
-    -- The footer uses uses hashChange to fire events
-    onHashChange' <- iterM (R.Maker.run component output)
+    -- The footer uses hashChange to fire events
+    onHashChange' <- iterM (R.Maker.run muid component output)
         (hoistF (R.mapAction TD.App.FooterAction) (R.mkHandler TD.Footer.onHashChange))
     js_addHashChangeListener onHashChange'
 
@@ -106,7 +109,7 @@ main = do
     -- Run the gadget effect which reads actions from 'Pipes.Concurrent.Input'
     -- and notifies html React of any state changes.
     -- runEffect will only stop if input is finished (which in this example never does).
-    s' <- P.runEffect $ appEffect s input output component
+    s' <- P.runEffect $ appEffect s muid component output input
 
     -- Cleanup
     -- We actually never get here because in this example runEffect never quits
@@ -118,14 +121,15 @@ main = do
 appEffect
     :: MonadIO io
     => R.SuperModelOf TD.App.Widget
-    -> PC.Input TD.App.Action
-    -> PC.Output TD.App.Action
+    -> MVar Int
     -> R.ReactComponent
+    -> PC.Output TD.App.Action
+    -> PC.Input TD.App.Action
     -> P.Effect io (R.SuperModelOf TD.App.Widget)
-appEffect s input output component =
+appEffect s muid component output input =
     PL.execStateP s $
         appProducerIO input P.>->
-        runCommandsPipe output component P.>->
+        runCommandsPipe muid component output P.>->
         PP.drain
 
 appProducerIO
@@ -141,18 +145,20 @@ appProducer input = PM.execInput input (G.runGadgetT (hoist generalize TD.App.ga
 
 runCommandsPipe
     :: (MonadState (R.SuperModelOf TD.App.Widget) io, MonadIO io)
-    => PC.Output TD.App.Action
+    => MVar Int
     -> R.ReactComponent
+    -> PC.Output TD.App.Action
     -> P.Pipe (D.DList TD.App.Command) () io ()
-runCommandsPipe output component = PP.mapM (runCommands output component)
+runCommandsPipe muid component output = PP.mapM (runCommands muid component output)
 
 runCommands
     :: (Foldable t, MonadState (R.SuperModelOf TD.App.Widget) io, MonadIO io)
-    => PC.Output TD.App.Action
+    => MVar Int
     -> R.ReactComponent
+    -> PC.Output TD.App.Action
     -> t TD.App.Command
     -> io ()
-runCommands output component = traverse_ (liftIO . TD.App.run component output)
+runCommands muid component output = traverse_ (liftIO . TD.App.run muid component output)
 
 #ifdef __GHCJS__
 

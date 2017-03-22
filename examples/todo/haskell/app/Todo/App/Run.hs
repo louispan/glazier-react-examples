@@ -7,6 +7,7 @@
 module Todo.App.Run where
 
 import Control.Concurrent.STM
+import Control.Concurrent.MVar
 import Control.Lens
 import Control.Monad
 import Control.Monad.Trans.Class
@@ -22,21 +23,22 @@ import Todo.App as TD.App
 import qualified Todo.Footer.Run as TD.Footer
 import qualified Todo.Todo.Run as TD.Todo
 
-run :: R.ReactComponent -> PC.Output Action -> Command -> IO ()
+run :: MVar Int -> R.ReactComponent -> PC.Output Action -> Command -> IO ()
 
-run _ _ (RenderCommand sm props j) = R.componentSetState sm props j
+run _ _ _ (RenderCommand sm props j) = R.componentSetState sm props j
 
-run _ output (SendActionsCommand acts) =
+run _ _ output (SendActionsCommand acts) =
     void $ runMaybeT $
     traverse_ (\act -> lift $ atomically $ PC.send output act >>= guard) acts
 
-run _ _ (InputCommand cmd) = W.Input.run cmd
+run _ _ _ (InputCommand cmd) = W.Input.run cmd
 
-run comp output (TodosCommand cmd) =
+run muid comp output (TodosCommand cmd) =
     W.List.run
         (\k -> TD.Todo.run (contramap (TodosAction . W.List.ItemAction k) output))
+        muid
         comp
         (contramap TodosAction output)
         cmd
 
-run _ _ (FooterCommand cmd) = TD.Footer.run cmd
+run _ _ _ (FooterCommand cmd) = TD.Footer.run cmd
