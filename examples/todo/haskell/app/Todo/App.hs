@@ -71,7 +71,7 @@ data Action
 
 
 data Model = Model
-    { _uid :: J.JSString
+    { _key :: J.JSString
     , _componentRef :: J.JSVal
     , _frameNum :: Int
     , _input :: R.SuperModelOf W.Input.Widget
@@ -137,7 +137,7 @@ window :: G.WindowT (R.Design Model Plan) (R.ReactMlT Identity) ()
 window = do
     s <- ask
     lift $ R.lf (s ^. component . to JE.toJS)
-        [ ("key",  s ^. uid . to JE.toJS)
+        [ ("key",  s ^. key . to JE.toJS)
         , ("render", s ^. onRender . to JE.toJS)
         , ("ref", s ^. onComponentRef . to JE.toJS)
         ]

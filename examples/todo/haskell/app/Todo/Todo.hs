@@ -68,7 +68,7 @@ data Action
     | SubmitAction J.JSString
 
 data Model = Model
-    { _uid :: J.JSString
+    { _key :: J.JSString
     , _componentRef :: J.JSVal
     , _frameNum :: Int
     , _deferredActions :: D.DList Action
@@ -138,7 +138,7 @@ window :: G.WindowT (R.Design Model Plan) (R.ReactMlT Identity) ()
 window = do
     s <- ask
     lift $ R.lf (s ^. component . to JE.toJS)
-        [ ("key",  s ^. uid . to JE.toJS)
+        [ ("key",  s ^. key . to JE.toJS)
         , ("render", s ^. onRender . to JE.toJS)
         , ("ref", s ^. onComponentRef . to JE.toJS)
         , ("componentDidUpdate", s ^. onComponentDidUpdate . to JE.toJS)
@@ -169,7 +169,7 @@ render = do
         -- For uncontrolled components, we need to generate a new key per render
         -- in order for react to use the new defaultValue
         R.lf (JE.strJS "input") [ ("key", JE.toJS $ J.unwords
-                                       [ s ^. uid
+                                       [ s ^. key
                                        , s ^. frameNum . to show . to J.pack
                                        ])
                                 , ("ref", s ^.  onEditRef . to JE.toJS)
