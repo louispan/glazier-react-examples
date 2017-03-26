@@ -44,31 +44,19 @@ import qualified Todo.Filter as TD.Filter
 
 mkAppModel :: F (R.Maker TD.App.Action) TD.App.Model
 mkAppModel = TD.App.Model
-    <$> R.mkKey
-    <*> pure J.nullRef
-    <*> pure 0
-    <*> hoistF (R.mapAction TD.App.InputAction) (R.mkSuperModel W.Input.widget =<<
+    <$> hoistF (R.mapAction TD.App.InputAction) (R.mkSuperModel W.Input.widget =<<
          W.Input.Model
-          <$> R.mkKey
-          <*> pure J.nullRef
-          <*> pure "What needs to be done?"
+          <$> pure "What needs to be done?"
           <*> pure "new-todo")
     <*> hoistF (R.mapAction TD.App.TodosAction) (R.mkSuperModel (W.List.widget mempty TD.Todo.widget) =<<
          W.List.Model
-         <$> R.mkKey
-         <*> pure J.nullRef
-         <*> pure 0
-         <*> pure mempty
-         <*> pure "todo-list"
+         <$> pure "todo-list"
          <*> pure 0
          <*> pure mempty
          <*> pure (const True))
     <*> hoistF (R.mapAction TD.App.FooterAction) (R.mkSuperModel TD.Footer.widget =<<
          TD.Footer.Model
-         <$> R.mkKey
-         <*> pure J.nullRef
-         <*> pure 0
-         <*> pure 0
+         <$> pure 0
          <*> pure 0
          <*> pure TD.Filter.All)
 

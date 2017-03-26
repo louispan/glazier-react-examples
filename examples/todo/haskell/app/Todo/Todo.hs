@@ -57,7 +57,7 @@ data Action
     = ComponentRefAction J.JSVal
     | RenderAction
     | ComponentDidUpdateAction
-    | SendCommandsAction [Command]
+    | SendCommandAction Command
     | EditRefAction J.JSVal
     | StartEditAction
     | FocusEditAction
@@ -68,14 +68,10 @@ data Action
     | SubmitAction J.JSString
 
 data Model = Model
-    { _key :: J.JSString
-    , _componentRef :: J.JSVal
-    , _frameNum :: Int
-    , _deferredActions :: D.DList Action
-    , _editRef :: J.JSVal
-    , _value :: J.JSString
+    { _value :: J.JSString
     , _completed :: Bool
     , _editing :: Bool
+    , _deferredActions :: D.DList Action -- FIXME: Move this to plan
     }
 
 instance CD.Disposing Model where
@@ -83,6 +79,10 @@ instance CD.Disposing Model where
 
 data Plan = Plan
     { _component :: R.ReactComponent
+    , _key :: J.JSString
+    , _frameNum :: Int
+    , _componentRef :: J.JSVal
+    , _editRef :: J.JSVal
     , _onRender :: J.Callback (J.JSVal -> IO J.JSVal)
     , _onComponentRef :: J.Callback (J.JSVal -> IO ())
     , _onComponentDidUpdate :: J.Callback (J.JSVal -> IO ())
@@ -102,6 +102,10 @@ makeClassy ''Model
 mkPlan :: R.Frame Model Plan -> F (R.Maker Action) Plan
 mkPlan mm = Plan
     <$> R.getComponent
+    <*> R.mkKey
+    <*> pure 0
+    <*> pure J.nullRef
+    <*> pure J.nullRef
     <*> (R.mkRenderer mm $ const render)
     <*> (R.mkHandler $ pure . pure . ComponentRefAction)
     <*> (R.mkHandler $ pure . pure . const ComponentDidUpdateAction)
@@ -188,7 +192,8 @@ onEditKeyDown' = R.eventHandlerM W.Input.whenKeyDown goLazy
   where
     goLazy :: (Maybe J.JSString, J.JSVal) -> MaybeT IO [Action]
     goLazy (ms, j) = pure $
-        SendCommandsAction [SetPropertyCommand ("value", JE.toJS J.empty) j]
+        -- We have finished with the edit input form, reset the input value to keep the DOM clean.
+        SendCommandAction $ SetPropertyCommand ("value", JE.toJS J.empty) j
         : maybe [CancelEditAction] (pure . SubmitAction) ms
 
 gadget :: G.GadgetT Action (R.SuperModel Model Plan) Identity (D.DList Command)
@@ -212,7 +217,7 @@ gadget = do
             -- st :: Action -> StateT SuperModel m (D.DList Command)
             pure $ D.singleton $ SendActionsCommand $ D.toList acts
 
-        SendCommandsAction cmds -> pure $ D.fromList cmds
+        SendCommandAction cmd -> pure cmd
 
         -- widget specific actions
         -- Focus after rendering changed because a new input element might have been rendered

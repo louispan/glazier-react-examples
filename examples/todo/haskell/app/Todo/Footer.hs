@@ -63,10 +63,7 @@ data Action
     | SetCountsAction Int Int
 
 data Model = Model
-    { _key :: J.JSString
-    , _componentRef :: J.JSVal
-    , _frameNum :: Int
-    , _activeCount :: Int
+    { _activeCount :: Int
     , _completedCount :: Int
     , _filter :: TD.Filter.Filter
     }
@@ -76,6 +73,9 @@ instance CD.Disposing Model where
 
 data Plan = Plan
     { _component :: R.ReactComponent
+    , _key :: J.JSString
+    , _componentRef :: J.JSVal
+    , _frameNum :: Int
     , _onRender :: J.Callback (J.JSVal -> IO J.JSVal)
     , _onComponentRef :: J.Callback (J.JSVal -> IO ())
     , _fireClearCompleted :: J.Callback (J.JSVal -> IO ())
@@ -89,6 +89,9 @@ makeClassy ''Model
 mkPlan :: R.Frame Model Plan -> F (R.Maker Action) Plan
 mkPlan mm = Plan
     <$> R.getComponent
+    <*> R.mkKey
+    <*> pure J.nullRef
+    <*> pure 0
     <*> (R.mkRenderer mm $ const render)
     <*> (R.mkHandler $ pure . pure . ComponentRefAction)
     <*> (R.mkHandler $ pure . pure . const ClearCompletedAction)

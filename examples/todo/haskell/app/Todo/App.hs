@@ -71,16 +71,16 @@ data Action
 
 
 data Model = Model
-    { _key :: J.JSString
-    , _componentRef :: J.JSVal
-    , _frameNum :: Int
-    , _input :: R.SuperModelOf W.Input.Widget
+    { _input :: R.SuperModelOf W.Input.Widget
     , _todos :: R.SuperModelOf (W.List.Widget TodosKey TD.Todo.Widget)
     , _footer :: R.SuperModelOf TD.Footer.Widget
     }
 
 data Plan = Plan
     { _component :: R.ReactComponent
+    , _key :: J.JSString
+    , _frameNum :: Int
+    , _componentRef :: J.JSVal
     , _onRender ::  J.Callback (J.JSVal -> IO J.JSVal)
     , _onComponentRef :: J.Callback (J.JSVal -> IO ())
     , _fireToggleCompleteAll :: J.Callback (J.JSVal -> IO ())
@@ -93,6 +93,9 @@ makeClassy ''Plan
 mkPlan :: R.Frame Model Plan -> F (R.Maker Action) Plan
 mkPlan mm = Plan
     <$> R.getComponent
+    <*> R.mkKey
+    <*> pure 0
+    <*> pure J.nullRef
     <*> (R.mkRenderer mm (const render))
     <*> (R.mkHandler $ pure . pure . ComponentRefAction)
     <*> (R.mkHandler $ pure . pure . const ToggleCompleteAllAction)
@@ -275,15 +278,11 @@ gadget = do
 
   where
     toTodoModel :: J.JSString -> TodosKey -> TD.Todo.Model
-    toTodoModel str k = TD.Todo.Model
-        (J.pack . show $ k)
-        J.nullRef
-        0
-        mempty
-        J.nullRef
+    toTodoModel str _ = TD.Todo.Model
         str
         False
         False
+        mempty
 
     toggleCompleteAll
         :: Bool
