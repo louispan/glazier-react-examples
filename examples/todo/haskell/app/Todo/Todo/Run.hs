@@ -7,7 +7,6 @@ import Control.Concurrent.STM
 import Control.Monad
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
-import Data.Foldable
 import qualified GHCJS.Types as J
 import qualified Glazier.React.Command.Run as R
 import qualified JavaScript.Extras as JE
@@ -22,9 +21,8 @@ run _ (RenderCommand sm props j) = R.componentSetState sm props j
 
 run _ (FocusNodeCommand j) = js_focus j
 
-run output (SendActionsCommand acts) =
-    void $ runMaybeT $
-    traverse_ (\act -> lift $ atomically $ PC.send output act >>= guard) acts
+run output (SendActionCommand act) =
+    void $ runMaybeT $ lift $ atomically $ PC.send output act >>= guard
 
 #ifdef __GHCJS__
 

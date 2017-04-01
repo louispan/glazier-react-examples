@@ -51,7 +51,7 @@ data Command
     = RenderCommand (R.SuperModel Model Plan) [JE.Property] J.JSVal
     | SetPropertyCommand JE.Property J.JSVal
     | FocusNodeCommand J.JSVal
-    | SendActionsCommand [Action]
+    | SendActionCommand Action
 
 data Action
     = ComponentRefAction J.JSVal
@@ -71,7 +71,7 @@ data Model = Model
     { _value :: J.JSString
     , _completed :: Bool
     , _editing :: Bool
-    , _deferredActions :: D.DList Action -- FIXME: Move this to plan
+    , _autoFocusEdit :: Bool
     }
 
 instance CD.Disposing Model where
@@ -193,7 +193,7 @@ onEditKeyDown' = R.eventHandlerM W.Input.whenKeyDown goLazy
     goLazy :: (Maybe J.JSString, J.JSVal) -> MaybeT IO [Action]
     goLazy (ms, j) = pure $
         -- We have finished with the edit input form, reset the input value to keep the DOM clean.
-        SendCommandAction $ SetPropertyCommand ("value", JE.toJS J.empty) j
+        SendCommandAction (SetPropertyCommand ("value", JE.toJS J.empty) j)
         : maybe [CancelEditAction] (pure . SubmitAction) ms
 
 gadget :: G.GadgetT Action (R.SuperModel Model Plan) Identity (D.DList Command)
@@ -212,12 +212,13 @@ gadget = do
         ComponentDidUpdateAction -> do
             -- Run delayed action that need to wait until frame is re-rendered
             -- Eg focusing after other rendering changes
-            acts <- use deferredActions
-            deferredActions .= mempty
-            -- st :: Action -> StateT SuperModel m (D.DList Command)
-            pure $ D.singleton $ SendActionsCommand $ D.toList acts
+            focus' <- use autoFocusEdit
+            autoFocusEdit .= False
+            if focus'
+               then pure $ D.singleton $ SendActionCommand FocusEditAction
+               else pure mempty
 
-        SendCommandAction cmd -> pure cmd
+        SendCommandAction cmd -> pure $ D.singleton cmd
 
         -- widget specific actions
         -- Focus after rendering changed because a new input element might have been rendered
@@ -246,7 +247,7 @@ gadget = do
                 guard (not b)
                 editing .= True
                 -- Need to delay focusing until after the next render
-                deferredActions %= (`D.snoc` FocusEditAction)
+                autoFocusEdit .= True
                 D.singleton <$> R.basicRenderCmd frameNum componentRef RenderCommand
             maybe (pure mempty) pure ret
 
@@ -263,5 +264,5 @@ gadget = do
             value .= v'
             editing .= False
             if J.null v'
-                then pure $ D.singleton $ SendActionsCommand [DestroyAction]
+                then pure $ D.singleton $ SendActionCommand DestroyAction
                 else D.singleton <$> R.basicRenderCmd frameNum componentRef RenderCommand

@@ -69,7 +69,6 @@ data Action
     | TodosAction (W.List.Action TodosKey TD.Todo.Widget)
     | FooterAction TD.Footer.Action
 
-
 data Model = Model
     { _input :: R.SuperModelOf W.Input.Widget
     , _todos :: R.SuperModelOf (W.List.Widget TodosKey TD.Todo.Widget)
@@ -282,7 +281,7 @@ gadget = do
         str
         False
         False
-        mempty
+        False
 
     toggleCompleteAll
         :: Bool
@@ -290,7 +289,7 @@ gadget = do
         -> R.SuperModelOf TD.Todo.Widget
         -> D.DList Action
     toggleCompleteAll b k todoSuperModel =
-        if (todoSuperModel ^. (TD.Todo.model . TD.Todo.completed) /= b)
+        if todoSuperModel ^. (TD.Todo.model . TD.Todo.completed) /= b
             then D.singleton $ TodosAction $ W.List.ItemAction k (TD.Todo.SetCompletedAction b)
             else mempty
 
