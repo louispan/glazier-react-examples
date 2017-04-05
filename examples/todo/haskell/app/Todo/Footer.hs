@@ -11,18 +11,14 @@ module Todo.Footer
     ( Command(..)
     , Action(..)
     , AsAction(..)
+    , Schema(..)
+    , HasSchema(..)
     , Plan(..)
     , HasPlan(..)
-    , mkPlan
-    , Model(..)
-    , HasModel(..)
-    , Design
-    , Frame
-    , SuperModel
+    , Outline
+    , Model
     , Widget
     , widget
-    , window
-    , gadget
     , onHashChange
     , whenHashChange
     , withHashChange
@@ -53,7 +49,7 @@ import qualified Prelude as P
 import qualified Todo.Filter as TD.Filter
 
 data Command
-    = RenderCommand (R.SuperModel Model Plan) [JE.Property] J.JSVal
+    = RenderCommand (R.Gizmo Model Plan) [JE.Property] J.JSVal
 
 data Action
     = ComponentRefAction J.JSVal
@@ -62,14 +58,18 @@ data Action
     | SetFilterAction TD.Filter.Filter
     | SetCountsAction Int Int
 
-data Model = Model
+data Schema = Schema
     { _activeCount :: Int
     , _completedCount :: Int
     , _filter :: TD.Filter.Filter
     }
 
-instance CD.Disposing Model where
-    disposing _ = CD.DisposeNone
+type Model = Schema
+type Outline = Schema
+instance R.ToOutline Model Outline where outline = id
+
+mkModel :: Outline -> F (R.Maker Action) Model
+mkModel = pure
 
 data Plan = Plan
     { _component :: R.ReactComponent
@@ -81,10 +81,9 @@ data Plan = Plan
     , _fireClearCompleted :: J.Callback (J.JSVal -> IO ())
     } deriving G.Generic
 
-instance CD.Disposing Plan
 makeClassyPrisms ''Action
 makeClassy ''Plan
-makeClassy ''Model
+makeClassy ''Schema
 
 mkPlan :: R.Frame Model Plan -> F (R.Maker Action) Plan
 mkPlan mm = Plan
@@ -96,29 +95,30 @@ mkPlan mm = Plan
     <*> (R.mkHandler $ pure . pure . ComponentRefAction)
     <*> (R.mkHandler $ pure . pure . const ClearCompletedAction)
 
+instance CD.Disposing Plan
+instance CD.Disposing Model where
+    disposing _ = CD.DisposeNone
+
 -- Link Glazier.React.Model's HasPlan/HasModel with this widget's HasPlan/HasModel from makeClassy
-instance HasPlan (R.Design Model Plan) where
+instance HasPlan (R.Scene Model Plan) where
     plan = R.plan
-instance HasModel (R.Design Model Plan) where
-    model = R.model
-instance HasPlan (R.SuperModel Model Plan) where
-    plan = R.design . plan
-instance HasModel (R.SuperModel Model Plan) where
-    model = R.design . model
+instance HasSchema (R.Scene Model Plan) where
+    schema = R.model
+instance HasPlan (R.Gizmo Model Plan) where
+    plan = R.scene . plan
+instance HasSchema (R.Gizmo Model Plan) where
+    schema = R.scene . schema
 
-type Design = R.Design Model Plan
-type Frame = R.Frame Model Plan
-type SuperModel = R.SuperModel Model Plan
-
-type Widget = R.Widget Command Action Model Plan
-widget :: R.Widget Command Action Model Plan
+type Widget = R.Widget Command Action Outline Model Plan
+widget :: Widget
 widget = R.Widget
+    mkModel
     mkPlan
     window
     gadget
 
 -- | This is used by parent components to render this component
-window :: G.WindowT (R.Design Model Plan) (R.ReactMlT Identity) ()
+window :: G.WindowT (R.Scene Model Plan) (R.ReactMlT Identity) ()
 window = do
     s <- ask
     lift $ R.lf (s ^. component . to JE.toJS)
@@ -127,7 +127,7 @@ window = do
         , ("ref", s ^. onComponentRef . to JE.toJS)
         ]
 
-render :: G.WindowT (R.Design Model Plan) (R.ReactMlT Identity) ()
+render :: G.WindowT (R.Scene Model Plan) (R.ReactMlT Identity) ()
 render = do
     s <- ask
     lift $ R.bh (JE.strJS "footer") [("className", JE.strJS "footer")] $ do
@@ -170,7 +170,7 @@ render = do
 classNames :: [(J.JSString, Bool)] -> J.JSVal
 classNames = JE.toJS . J.unwords . fmap fst . P.filter snd
 
-gadget :: G.GadgetT Action (R.SuperModel Model Plan) Identity (D.DList Command)
+gadget :: G.GadgetT Action (R.Gizmo Model Plan) Identity (D.DList Command)
 gadget = do
     a <- ask
     case a of
