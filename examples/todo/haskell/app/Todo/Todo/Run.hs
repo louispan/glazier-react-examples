@@ -21,8 +21,8 @@ run _ (RenderCommand sm props j) = R.componentSetState sm props j
 
 run _ (FocusNodeCommand j) = js_focus j
 
-run output (SendActionCommand act) =
-    void $ runMaybeT $ lift $ atomically $ PC.send output act >>= guard
+run output SendDestroyActionCommand =
+    void $ runMaybeT $ lift $ atomically $ PC.send output DestroyAction >>= guard
 
 #ifdef __GHCJS__
 

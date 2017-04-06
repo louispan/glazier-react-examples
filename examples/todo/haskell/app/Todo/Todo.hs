@@ -46,13 +46,13 @@ data Command
     = RenderCommand (R.Gizmo Model Plan) [JE.Property] J.JSVal
     | SetPropertyCommand JE.Property J.JSVal
     | FocusNodeCommand J.JSVal
-    | SendActionCommand Action
+    | SendDestroyActionCommand
 
 data Action
     = ComponentRefAction J.JSVal
     | RenderAction
     | ComponentDidUpdateAction
-    | SendCommandAction Command
+    | SetPropertyAction JE.Property J.JSVal
     | EditRefAction J.JSVal
     | StartEditAction
     | ToggleCompletedAction
@@ -191,7 +191,7 @@ onEditKeyDown' = R.eventHandlerM W.Input.whenKeyDown goLazy
     goLazy :: (Maybe J.JSString, J.JSVal) -> MaybeT IO [Action]
     goLazy (ms, j) = pure $
         -- We have finished with the edit input form, reset the input value to keep the DOM clean.
-        SendCommandAction (SetPropertyCommand ("value", JE.toJS' J.empty) j)
+        SetPropertyAction ("value", JE.toJS' J.empty) j
         : maybe [CancelEditAction] (pure . SubmitAction) ms
 
 gadget :: G.GadgetT Action (R.Gizmo Model Plan) Identity (D.DList Command)
@@ -220,7 +220,7 @@ gadget = do
                 pure $ D.singleton $ FocusNodeCommand input'
             maybe (pure mempty) pure ret
 
-        SendCommandAction cmd -> pure $ D.singleton cmd
+        SetPropertyAction props j -> pure $ D.singleton $ SetPropertyCommand props j
 
         EditRefAction v -> do
             editRef .= v
@@ -257,5 +257,5 @@ gadget = do
             value .= v'
             editing .= False
             if J.null v'
-                then pure $ D.singleton $ SendActionCommand DestroyAction
+                then pure $ D.singleton $ SendDestroyActionCommand
                 else D.singleton <$> R.basicRenderCmd frameNum componentRef RenderCommand

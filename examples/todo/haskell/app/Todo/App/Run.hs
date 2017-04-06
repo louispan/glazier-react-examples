@@ -27,9 +27,12 @@ run :: MVar Int -> R.ReactComponent -> PC.Output Action -> Command -> IO ()
 
 run _ _ _ (RenderCommand sm props j) = R.componentSetState sm props j
 
-run _ _ output (SendActionsCommand acts) =
+run _ _ output (SendTodosActionsCommand acts) =
     void $ runMaybeT $
-    traverse_ (\act -> lift $ atomically $ PC.send output act >>= guard) acts
+    traverse_ (\act -> lift $ atomically $ PC.send output act >>= guard) (TodosAction <$> acts)
+
+run _ _ output (SendFooterActionCommand act) =
+    void $ atomically $ PC.send output (FooterAction act)
 
 run _ _ _ (InputCommand cmd) = W.Input.run cmd
 

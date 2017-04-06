@@ -53,7 +53,8 @@ type TodosKey = Int
 
 data Command
     = RenderCommand (R.Gizmo Model Plan) [JE.Property] J.JSVal
-    | SendActionsCommand [Action]
+    | SendTodosActionsCommand [W.List.Action TodosKey TD.Todo.Widget]
+    | SendFooterActionCommand TD.Footer.Action
     | InputCommand W.Input.Command
     | TodosCommand (W.List.Command TodosKey TD.Todo.Widget)
     | FooterCommand TD.Footer.Command
@@ -82,7 +83,6 @@ mkModel separator (Schema a b c) = Schema
     <$> (R.hoistWithAction InputAction (R.mkGizmo' W.Input.widget a))
     <*> (R.hoistWithAction TodosAction (R.mkGizmo' (W.List.widget separator TD.Todo.widget) b))
     <*> (R.hoistWithAction FooterAction (R.mkGizmo' TD.Footer.widget c))
-
 
 data Plan = Plan
     { _component :: R.ReactComponent
@@ -194,8 +194,8 @@ footerWindow = magnify (footer . R.scene) (R.window TD.Footer.widget)
 updateFooterGadget :: G.GadgetT Action (R.Gizmo Model Plan) Identity (D.DList Command)
 updateFooterGadget = do
     (active, completed) <- use (todos . W.List.items . to (M.partition (isActiveTodo . R.outline)))
-    pure $ D.singleton $ SendActionsCommand
-                [FooterAction $ TD.Footer.SetCountsAction (length active) (length completed)]
+    pure $ D.singleton $ SendFooterActionCommand
+                (TD.Footer.SetCountsAction (length active) (length completed))
 
 gadget :: R.ReactMlT Identity () -> G.GadgetT Action (R.Gizmo Model Plan) Identity (D.DList Command)
 gadget separator = do
@@ -212,14 +212,14 @@ gadget separator = do
             s <- use (todos . W.List.items)
             let b = hasActiveTodos s
             let acts = M.foldMapWithKey (toggleCompleteAll b) s
-            pure $ D.singleton $ SendActionsCommand $ D.toList $ acts `D.snoc` TodosAction W.List.RenderAction
+            pure $ D.singleton $ SendTodosActionsCommand $ D.toList $ acts `D.snoc` W.List.RenderAction
 
         InputAction (W.Input.SubmitAction str) -> do
             cmds <- inputGadget
             let str' = J.strip str
             cmds' <- if J.null str'
                 then pure mempty
-                else pure . D.singleton $ SendActionsCommand [TodosAction $ W.List.MakeItemAction
+                else pure . D.singleton $ SendTodosActionsCommand [W.List.MakeItemAction
                                                                  (+ 1)
                                                                  (pure . toTodoModel str')
                                                              ]
@@ -229,7 +229,7 @@ gadget separator = do
 
         TodosAction (W.List.ItemAction k TD.Todo.DestroyAction) -> do
             cmds <- todosGadget separator
-            cmds' <- pure $ D.singleton $ SendActionsCommand [TodosAction $ W.List.DestroyItemAction k]
+            cmds' <- pure $ D.singleton $ SendTodosActionsCommand [W.List.DestroyItemAction k]
             pure $ cmds `mappend` cmds'
 
         TodosAction (W.List.DestroyItemAction _) -> do
@@ -255,7 +255,7 @@ gadget separator = do
         TodosAction (W.List.ItemAction _ TD.Todo.ToggleCompletedAction) -> do
             cmds <- todosGadget separator
             cmds' <- updateFooterGadget
-            pure $ cmds `mappend` cmds' `D.snoc` SendActionsCommand [TodosAction W.List.RenderAction]
+            pure $ cmds `mappend` cmds' `D.snoc` SendTodosActionsCommand [W.List.RenderAction]
 
         TodosAction _ -> do
             cmds <- todosGadget separator
@@ -266,7 +266,7 @@ gadget separator = do
             cmds <- footerGadget
             (todos . W.List.items) %= M.filter (isActiveTodo . R.outline)
             cmds' <- updateFooterGadget
-            pure $ cmds `mappend` cmds' `D.snoc` SendActionsCommand [TodosAction W.List.RenderAction]
+            pure $ cmds `mappend` cmds' `D.snoc` SendTodosActionsCommand [W.List.RenderAction]
 
         FooterAction (TD.Footer.SetFilterAction _) -> do
             cmds <- footerGadget
@@ -275,7 +275,7 @@ gadget separator = do
                     TD.Filter.All -> const True
                     TD.Filter.Active -> isActiveTodo
                     TD.Filter.Completed -> not . isActiveTodo
-            pure $ cmds `D.snoc` SendActionsCommand [TodosAction $ W.List.SetFilterAction p]
+            pure $ cmds `D.snoc` SendTodosActionsCommand [W.List.SetFilterAction p]
 
         FooterAction _ -> footerGadget
 
@@ -291,10 +291,10 @@ gadget separator = do
         :: Bool
         -> TodosKey
         -> R.GizmoOf TD.Todo.Widget
-        -> D.DList Action
+        -> D.DList (W.List.Action TodosKey TD.Todo.Widget)
     toggleCompleteAll b k todoGizmo =
         if todoGizmo ^. (TD.Todo.schema . TD.Todo.completed) /= b
-            then D.singleton $ TodosAction $ W.List.ItemAction k (TD.Todo.SetCompletedAction b)
+            then D.singleton $ W.List.ItemAction k (TD.Todo.SetCompletedAction b)
             else mempty
 
 inputGadget :: G.GadgetT Action (R.Gizmo Model Plan) Identity (D.DList Command)
