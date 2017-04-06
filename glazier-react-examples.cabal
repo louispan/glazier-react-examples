@@ -23,7 +23,6 @@ executable glazier-react-todo
                        Todo.Footer
                        Todo.Footer.Run
   main-is:             Main.hs
-  js-sources:          examples/todo/haskell/jsbits/global.js
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
   cpp-options:         -DGHCJS_BROWSER
   build-depends:       base >= 4.7 && < 5
@@ -32,9 +31,9 @@ executable glazier-react-todo
                      , dlist >= 0.8 && < 0.9
                      , free >= 4.12 && < 5
                      , glazier >= 0.10 && < 1
-                     , glazier-react >= 0.5 && < 1
-                     , glazier-react-widget >= 0.5 && < 1
-                     , javascript-extras >= 0.2.0.2 && < 1
+                     , glazier-react >= 0.6.0 && < 1
+                     , glazier-react-widget >= 0.6.0 && < 1
+                     , javascript-extras >= 0.3 && < 1
                      , lens >= 4 && < 5
                      , mmorph >= 1 && < 2
                      , mtl >= 2 && < 3

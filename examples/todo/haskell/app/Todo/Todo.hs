@@ -30,7 +30,6 @@ import qualified Data.DList as D
 import qualified Data.JSString as J
 import qualified GHC.Generics as G
 import qualified GHCJS.Foreign.Callback as J
-import qualified GHCJS.Nullable as J
 import qualified GHCJS.Types as J
 import qualified Glazier as G
 import qualified Glazier.React.Command as R
@@ -56,7 +55,6 @@ data Action
     | SendCommandAction Command
     | EditRefAction J.JSVal
     | StartEditAction
-    | FocusEditAction
     | ToggleCompletedAction
     | SetCompletedAction Bool
     | DestroyAction
@@ -141,51 +139,51 @@ widget = R.Widget
 window :: G.WindowT (R.Scene Model Plan) (R.ReactMlT Identity) ()
 window = do
     s <- ask
-    lift $ R.lf (s ^. component . to JE.toJS)
-        [ ("key",  s ^. key . to JE.toJS)
-        , ("render", s ^. onRender . to JE.toJS)
-        , ("ref", s ^. onComponentRef . to JE.toJS)
-        , ("componentDidUpdate", s ^. onComponentDidUpdate . to JE.toJS)
+    lift $ R.lf (s ^. component . to JE.toJS')
+        [ ("key",  s ^. key . to JE.toJS')
+        , ("render", s ^. onRender . to JE.toJS')
+        , ("ref", s ^. onComponentRef . to JE.toJS')
+        , ("componentDidUpdate", s ^. onComponentDidUpdate . to JE.toJS')
         ]
 
 render :: G.WindowT (R.Scene Model Plan) (R.ReactMlT Identity) ()
 render = do
     s <- ask
-    lift $ R.bh (JE.strJS "li") [ ("className", classNames [ ("completed", s ^. completed)
-                                                            , ("editing", s ^. editing)])
-                                 ] $ do
-        R.bh (JE.strJS "div") [ ("key", JE.strJS "view")
-                               , ("className", JE.strJS "view")
-                               ] $ do
-            R.lf (JE.strJS "input") [ ("key", JE.strJS "toggle")
-                                    , ("className", JE.strJS "toggle")
-                                    , ("type", JE.strJS "checkbox")
-                                    , ("checked", s ^. completed . to JE.toJS)
-                                    , ("onChange", s ^. fireToggleComplete . to JE.toJS)
-                                    ]
-            R.bh (JE.strJS "label")  [ ("key", JE.strJS "label")
-                                      , ("onDoubleClick", s ^. fireStartEdit. to JE.toJS)
-                                      ] (s ^. value . to R.txt)
-            R.lf (JE.strJS "button") [ ("key", JE.strJS "destroy")
-                                      , ("className", JE.strJS "destroy")
-                                      , ("onClick", s ^. fireDestroy . to JE.toJS)
-                                      ]
+    lift $ R.bh "li" [ ("className", classNames [ ("completed", s ^. completed)
+                                                , ("editing", s ^. editing)])
+                     ] $ do
+        R.bh "div" [ ("key", "view")
+                   , ("className", "view")
+                   ] $ do
+            R.lf "input" [ ("key", "toggle")
+                         , ("className", "toggle")
+                         , ("type", "checkbox")
+                         , ("checked", s ^. completed . to JE.toJS')
+                         , ("onChange", s ^. fireToggleComplete . to JE.toJS')
+                         ]
+            R.bh "label"  [ ("key", "label")
+                          , ("onDoubleClick", s ^. fireStartEdit. to JE.toJS')
+                          ] (s ^. value . to R.txt)
+            R.lf "button" [ ("key", "destroy")
+                          , ("className", "destroy")
+                          , ("onClick", s ^. fireDestroy . to JE.toJS')
+                          ]
         -- For uncontrolled components, we need to generate a new key per render
         -- in order for react to use the new defaultValue
-        R.lf (JE.strJS "input") [ ("key", JE.toJS $ J.unwords
+        R.lf "input" [ ("key", JE.toJS' $ J.unwords
                                        [ s ^. key
                                        , s ^. frameNum . to show . to J.pack
                                        ])
-                                , ("ref", s ^.  onEditRef . to JE.toJS)
-                                , ("className", JE.strJS "edit")
-                                , ("defaultValue", s ^. value . to JE.toJS)
-                                , ("defaultChecked", s ^. completed . to JE.toJS)
-                                , ("onBlur", s ^. fireCancelEdit . to JE.toJS)
-                                , ("onKeyDown", s ^. onEditKeyDown . to JE.toJS)
-                                ]
+                     , ("ref", s ^.  onEditRef . to JE.toJS')
+                     , ("className", "edit")
+                     , ("defaultValue", s ^. value . to JE.toJS')
+                     , ("defaultChecked", s ^. completed . to JE.toJS')
+                     , ("onBlur", s ^. fireCancelEdit . to JE.toJS')
+                     , ("onKeyDown", s ^. onEditKeyDown . to JE.toJS')
+                     ]
 
-classNames :: [(J.JSString, Bool)] -> J.JSVal
-classNames = JE.toJS . J.unwords . fmap fst . filter snd
+classNames :: [(J.JSString, Bool)] -> JE.JSVar
+classNames = JE.toJS' . J.unwords . fmap fst . filter snd
 
 onEditKeyDown' :: J.JSVal -> MaybeT IO [Action]
 onEditKeyDown' = R.eventHandlerM W.Input.whenKeyDown goLazy
@@ -193,7 +191,7 @@ onEditKeyDown' = R.eventHandlerM W.Input.whenKeyDown goLazy
     goLazy :: (Maybe J.JSString, J.JSVal) -> MaybeT IO [Action]
     goLazy (ms, j) = pure $
         -- We have finished with the edit input form, reset the input value to keep the DOM clean.
-        SendCommandAction (SetPropertyCommand ("value", JE.toJS J.empty) j)
+        SendCommandAction (SetPropertyCommand ("value", JE.toJS' J.empty) j)
         : maybe [CancelEditAction] (pure . SubmitAction) ms
 
 gadget :: G.GadgetT Action (R.Gizmo Model Plan) Identity (D.DList Command)
@@ -214,20 +212,15 @@ gadget = do
             -- Eg focusing after other rendering changes
             focus' <- use autoFocusEdit
             autoFocusEdit .= False
-            if focus'
-               then pure $ D.singleton $ SendActionCommand FocusEditAction
-               else pure mempty
-
-        SendCommandAction cmd -> pure $ D.singleton cmd
-
-        -- widget specific actions
-        -- Focus after rendering changed because a new input element might have been rendered
-        FocusEditAction -> do
-            input <- use editRef
+            -- Focus after rendering changed because a new input element might have been rendered
             ret <- runMaybeT $ do
-                input' <- MaybeT $ pure $ J.nullableToMaybe (J.Nullable input)
+                guard focus'
+                input <- use editRef
+                input' <- MaybeT $ pure $ JE.fromJS input
                 pure $ D.singleton $ FocusNodeCommand input'
             maybe (pure mempty) pure ret
+
+        SendCommandAction cmd -> pure $ D.singleton cmd
 
         EditRefAction v -> do
             editRef .= v

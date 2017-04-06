@@ -143,18 +143,18 @@ isActiveTodo = view (TD.Todo.completed . to not)
 window :: G.WindowT (R.Scene Model Plan) (R.ReactMlT Identity) ()
 window = do
     s <- ask
-    lift $ R.lf (s ^. component . to JE.toJS)
-        [ ("key",  s ^. key . to JE.toJS)
-        , ("render", s ^. onRender . to JE.toJS)
-        , ("ref", s ^. onComponentRef . to JE.toJS)
+    lift $ R.lf (s ^. component . to JE.toJS')
+        [ ("key",  s ^. key . to JE.toJS')
+        , ("render", s ^. onRender . to JE.toJS')
+        , ("ref", s ^. onComponentRef . to JE.toJS')
         ]
 
 -- | This is used by the React render callback
 render :: R.ReactMlT Identity () -> G.WindowT (R.Scene Model Plan) (R.ReactMlT Identity) ()
 render separator = do
     s <- ask
-    lift $ R.bh (JE.strJS "header") [("className", JE.strJS "header")] $ do
-        R.bh (JE.strJS "h1") [("key", JE.strJS "heading")] (R.txt "todos")
+    lift $ R.bh "header" [("className", "header")] $ do
+        R.bh "h1" [("key", "heading")] (R.txt "todos")
         view G._WindowT inputWindow s
         view G._WindowT (mainWindow separator) s
 
@@ -166,17 +166,16 @@ mainWindow separator = do
         then pure ()
         else do
         s <- ask
-        lift $ R.bh (JE.strJS "section") [ ("key", JE.strJS "main")
-                                         , ("className", JE.strJS "main")
-                                         ] $ do
+        lift $ R.bh "section" [ ("key", "main")
+                              , ("className", "main")
+                              ] $ do
             -- Complete all checkbox
-            R.lf (JE.strJS "input")
-                        [ ("key", JE.strJS "toggle-all")
-                        , ("className", JE.strJS "toggle-all")
-                        , ("type", JE.strJS "checkbox")
-                        , ("checked", s ^. todos . W.List.items . to (JE.toJS . not . hasActiveTodos))
-                        , ("onChange", s ^. fireToggleCompleteAll . to JE.toJS)
-                        ]
+            R.lf "input" [ ("key", "toggle-all")
+                         , ("className", "toggle-all")
+                         , ("type", "checkbox")
+                         , ("checked", s ^. todos . W.List.items . to (JE.toJS' . not . hasActiveTodos))
+                         , ("onChange", s ^. fireToggleCompleteAll . to JE.toJS')
+                         ]
             -- Render the list of todos
             view G._WindowT (todoListWindow separator) s
 
