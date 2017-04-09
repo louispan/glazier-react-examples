@@ -10,9 +10,9 @@ EXTERNS := $(BUILD_MAKE_DIR)/react-externs.js
 
 # Run make with MINIFY=true to make minified js
 ifeq ($(MINIFY),)
-	project_source=$(BUILD_MAKE_DIR)/todo.max.js
+	project_source=$(BUILD_MAKE_DIR)/$(PROJECT_NAME).max.js
 else
-	project_source=$(BUILD_MAKE_DIR)/todo.min.js
+	project_source=$(BUILD_MAKE_DIR)/$(PROJECT_NAME).min.js
 endif
 export MINIFY
 
@@ -30,7 +30,7 @@ env: $(project_root)/stack.ghcjs.yaml
 	$(eval ghcjs_install_root := $(shell stack --stack-yaml $(project_root)/stack.ghcjs.yaml path --local-install-root))
 	$(eval ghcjs_project_out := $(ghcjs_install_root)/bin/$(PROJECT_NAME).jsexe)
 
-install: $(BUILD_MAKE_DIR)/todo.js
+install: $(BUILD_MAKE_DIR)/$(PROJECT_NAME).js
 	npm install
 
 # Build prod optimized JS
@@ -63,9 +63,9 @@ $(project_root)/stack.ghcjs.yaml: $(project_root)/stack.yaml  $(project_root)/gh
 $(BUILD_MAKE_DIR):
 	mkdir -p $(BUILD_MAKE_DIR)
 
-$(shell if [ ! $(BUILD_MAKE_DIR)/todo.js -ef $(project_source) ]; then rm -rf $(BUILD_MAKE_DIR)/todo.js; fi)
-$(BUILD_MAKE_DIR)/todo.js: $(project_source) | dir
-	ln -sf `realpath $(project_source)` $(BUILD_MAKE_DIR)/todo.js
+$(shell if [ ! $(BUILD_MAKE_DIR)/$(PROJECT_NAME).js -ef $(project_source) ]; then rm -rf $(BUILD_MAKE_DIR)/$(PROJECT_NAME).js; fi)
+$(BUILD_MAKE_DIR)/$(PROJECT_NAME).js: $(project_source) | dir
+	ln -sf `realpath $(project_source)` $(BUILD_MAKE_DIR)/$(PROJECT_NAME).js
 
 $(BUILD_MAKE_DIR)/all.js: | env dir build
 	ln -sf `realpath $(ghcjs_project_out)/all.js` $(BUILD_MAKE_DIR)/all.js
@@ -80,20 +80,20 @@ $(BUILD_MAKE_DIR)/all.js.externs: | env dir build
 # "ERROR - Closure dependency methods(goog.provide, goog.require, etc)
 # must be called at file scope. "
 # This step also removes the dummy calls to goog.provide and goog.require.
-$(BUILD_MAKE_DIR)/todo.max.js: $(BUILD_MAKE_DIR)/all.js haskell/jsbits/exports.header.js haskell/jsbits/exports.js | dir
+$(BUILD_MAKE_DIR)/$(PROJECT_NAME).max.js: $(BUILD_MAKE_DIR)/all.js haskell/jsbits/exports.header.js haskell/jsbits/exports.js | dir
 	cat haskell/jsbits/exports.header.js \
 		<(sed -e '/goog.provide.*/d;/goog.require.*/d' $(BUILD_MAKE_DIR)/all.js) \
 		haskell/jsbits/exports.js \
-		> $(BUILD_MAKE_DIR)/todo.max.js
+		> $(BUILD_MAKE_DIR)/$(PROJECT_NAME).max.js
 
-$(BUILD_MAKE_DIR)/todo.min.js: $(BUILD_MAKE_DIR)/react-externs.js $(BUILD_MAKE_DIR)/all.js.externs $(BUILD_MAKE_DIR)/todo.max.js | dir
+$(BUILD_MAKE_DIR)/$(PROJECT_NAME).min.js: $(BUILD_MAKE_DIR)/react-externs.js $(BUILD_MAKE_DIR)/all.js.externs $(BUILD_MAKE_DIR)/$(PROJECT_NAME).max.js | dir
 	closure-compiler \
 		--compilation_level=ADVANCED_OPTIMIZATIONS \
 		--externs $(BUILD_MAKE_DIR)/all.js.externs \
 		$(foreach extern, $(EXTERNS),--externs $(extern)) \
-		--create_source_map build/todo.min.js.map \
-		--js $(BUILD_MAKE_DIR)/todo.max.js \
-		--js_output_file $(BUILD_MAKE_DIR)/todo.min.js
+		--create_source_map build/$(PROJECT_NAME).min.js.map \
+		--js $(BUILD_MAKE_DIR)/$(PROJECT_NAME).max.js \
+		--js_output_file $(BUILD_MAKE_DIR)/$(PROJECT_NAME).min.js
 
 $(EXTERNS):
 	wget https://raw.githubusercontent.com/steida/react-externs/master/externs.js -O $(BUILD_MAKE_DIR)/react-externs.js
