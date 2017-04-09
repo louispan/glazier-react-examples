@@ -5,8 +5,8 @@ BUILD_MAKE_DIR:=build-make
 
 PROJECT_NAME:=glazier-react-todo
 
-# externs in addition to all.js.externs
-EXTERNS := $(BUILD_MAKE_DIR)/react-externs.js
+EXTERNS := $(BUILD_MAKE_DIR)/all.js.externs
+EXTERNS += $(BUILD_MAKE_DIR)/react-externs.js
 
 # Run make with MINIFY=true to make minified js
 ifeq ($(MINIFY),)
@@ -70,9 +70,6 @@ $(BUILD_MAKE_DIR)/$(PROJECT_NAME).js: $(project_source) | dir
 $(BUILD_MAKE_DIR)/all.js: | env dir build
 	ln -sf `realpath $(ghcjs_project_out)/all.js` $(BUILD_MAKE_DIR)/all.js
 
-$(BUILD_MAKE_DIR)/all.js.externs: | env dir build
-	ln -sf `realpath $(ghcjs_project_out)/all.js.externs` $(BUILD_MAKE_DIR)/all.js.externs
-
 # add a nodeJS module wrapper http://edsko.net/2015/02/14/atom-haskell/
 # Don't output to src as babel looks in that directory for js files to transpile.
 # Babel will freeze trying to transpile ghcjs output.
@@ -80,20 +77,24 @@ $(BUILD_MAKE_DIR)/all.js.externs: | env dir build
 # "ERROR - Closure dependency methods(goog.provide, goog.require, etc)
 # must be called at file scope. "
 # This step also removes the dummy calls to goog.provide and goog.require.
-$(BUILD_MAKE_DIR)/$(PROJECT_NAME).max.js: $(BUILD_MAKE_DIR)/all.js haskell/jsbits/exports.header.js haskell/jsbits/exports.js | dir
-	cat haskell/jsbits/exports.header.js \
-		<(sed -e '/goog.provide.*/d;/goog.require.*/d' $(BUILD_MAKE_DIR)/all.js) \
-		haskell/jsbits/exports.js \
-		> $(BUILD_MAKE_DIR)/$(PROJECT_NAME).max.js
+# $(BUILD_MAKE_DIR)/$(PROJECT_NAME).max.js: $(BUILD_MAKE_DIR)/all.js | dir
+# 	cat <(sed -e '/goog.provide.*/d;/goog.require.*/d' $(BUILD_MAKE_DIR)/all.js) \
+# 		> $(BUILD_MAKE_DIR)/$(PROJECT_NAME).max.js
 
-$(BUILD_MAKE_DIR)/$(PROJECT_NAME).min.js: $(BUILD_MAKE_DIR)/react-externs.js $(BUILD_MAKE_DIR)/all.js.externs $(BUILD_MAKE_DIR)/$(PROJECT_NAME).max.js | dir
+$(BUILD_MAKE_DIR)/$(PROJECT_NAME).max.js: $(BUILD_MAKE_DIR)/all.js
+	ln -sf `realpath $(BUILD_MAKE_DIR)/all.js` $(BUILD_MAKE_DIR)/$(PROJECT_NAME).max.js
+
+$(BUILD_MAKE_DIR)/$(PROJECT_NAME).min.js: $(EXTERNS) $(BUILD_MAKE_DIR)/$(PROJECT_NAME).max.js | dir
 	closure-compiler \
 		--compilation_level=ADVANCED_OPTIMIZATIONS \
-		--externs $(BUILD_MAKE_DIR)/all.js.externs \
 		$(foreach extern, $(EXTERNS),--externs $(extern)) \
 		--create_source_map build/$(PROJECT_NAME).min.js.map \
 		--js $(BUILD_MAKE_DIR)/$(PROJECT_NAME).max.js \
 		--js_output_file $(BUILD_MAKE_DIR)/$(PROJECT_NAME).min.js
 
-$(EXTERNS):
+$(BUILD_MAKE_DIR)/react-externs.js:
 	wget https://raw.githubusercontent.com/steida/react-externs/master/externs.js -O $(BUILD_MAKE_DIR)/react-externs.js
+
+
+$(BUILD_MAKE_DIR)/all.js.externs: | env dir build
+	ln -sf `realpath $(ghcjs_project_out)/all.js.externs` $(BUILD_MAKE_DIR)/all.js.externs
