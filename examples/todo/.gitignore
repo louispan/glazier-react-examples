@@ -11,9 +11,8 @@ build
 
 # misc
 .DS_Store
-.env
 npm-debug.log
-.build
+build-make
 
 public/all.js
 public/react.js

@@ -1,55 +1,77 @@
-SHELL := /bin/bash
-PROJECT_ROOT:=$(shell stack path --project-root)
-INSTALL_ROOT := $(shell stack --stack-yaml $(PROJECT_ROOT)/stack.ghcjs.yaml path --local-install-root)
-GHCJS_OUT:=$(INSTALL_ROOT)/bin/glazier-react-todo.jsexe
+SHELL:=/bin/bash
 
-.PHONY: all clean install install-min install-prod start start-min build
+# Avoid clashing with react-start-app build dir
+BUILD_MAKE_DIR:=build-make
 
-all: install-prod
-	@true # dependency tracking doesn't work for empty @targets
+PROJECT_NAME:=glazier-react-todo
 
-$(PROJECT_ROOT)/stack.ghcjs.yaml: $(PROJECT_ROOT)/stack.yaml  $(PROJECT_ROOT)/ghcjs.yaml
-	cat $(PROJECT_ROOT)/stack.yaml $(PROJECT_ROOT)/ghcjs.yaml > $(PROJECT_ROOT)/stack.ghcjs.yaml
-	# set the same variables as above
-	$(eval INSTALL_ROOT := $(shell stack --stack-yaml $(PROJECT_ROOT)/stack.ghcjs.yaml path --local-install-root))
-	$(eval GHCJS_OUT:=$(INSTALL_ROOT)/bin/glazier-react-todo.jsexe)
+# externs in addition to all.js.externs
+EXTERNS := $(BUILD_MAKE_DIR)/react-externs.js
 
-# install: .build/todo.js .build/todo.min.js
-# 	npm install
+# Run make with MINIFY=true to make minified js
+ifeq ($(MINIFY),)
+	project_source=$(BUILD_MAKE_DIR)/todo.max.js
+else
+	project_source=$(BUILD_MAKE_DIR)/todo.min.js
+endif
+export MINIFY
 
-install: .build/todo.max.js
-	cp .build/todo.max.js .build/todo.js
+project_root:=$(shell stack path --project-root)
+
+.PHONY: all env dir stack-clean clean check build install start install-prod deploy-prod
+
+all: | install
+
+# make all build directories
+dir: $(BUILD_MAKE_DIR)
+
+# create the ghcjs_project_out variable
+env: $(project_root)/stack.ghcjs.yaml
+	$(eval ghcjs_install_root := $(shell stack --stack-yaml $(project_root)/stack.ghcjs.yaml path --local-install-root))
+	$(eval ghcjs_project_out := $(ghcjs_install_root)/bin/$(PROJECT_NAME).jsexe)
+
+install: $(BUILD_MAKE_DIR)/todo.js
 	npm install
 
-install-min: .build/todo.min.js
-	cp .build/todo.min.js .build/todo.js
-	npm install
-
-install-prod: install-min
+# Build prod optimized JS
+install-prod:
+	$(eval MINIFY := true)
+	@$(MAKE) install
 	npm run build
 
-deploy-prod: install-prod
+# Deploy to ghpages
+deploy-prod: | install-prod
 	npm run deploy
 
-clean:
+stack-clean:
+	stack clean --stack-yaml $(project_root)/stack.ghcjs.yaml
+	rm $(project_root)/stack.ghcjs.yaml
+
+clean: | stack-clean
 	rm -rf node_modules
-	rm -rf .build
-	stack clean
+	rm -rf $(BUILD_MAKE_DIR)
 
-start: install
+start: | install
 	npm start
 
-start-min: install-min
-	npm start
+build: $(project_root)/stack.ghcjs.yaml
+	stack build --stack-yaml $(project_root)/stack.ghcjs.yaml
 
-build: $(PROJECT_ROOT)/stack.ghcjs.yaml
-	stack build --stack-yaml $(PROJECT_ROOT)/stack.ghcjs.yaml
+$(project_root)/stack.ghcjs.yaml: $(project_root)/stack.yaml  $(project_root)/ghcjs.yaml
+	cat $(project_root)/stack.yaml $(project_root)/ghcjs.yaml > $(project_root)/stack.ghcjs.yaml
 
-$(GHCJS_OUT)/all.js: build
-	@true # dependency tracking doesn't work for empty @targets
+$(BUILD_MAKE_DIR):
+	mkdir -p $(BUILD_MAKE_DIR)
 
-$(GHCJS_OUT)/all.js.externs: build
-	@true # dependency tracking doesn't work for empty @targets
+$(shell if [ ! $(BUILD_MAKE_DIR)/todo.js -ef $(project_source) ]; then rm -rf $(BUILD_MAKE_DIR)/todo.js; fi)
+$(BUILD_MAKE_DIR)/todo.js: $(project_source) | dir
+	ln -sf `realpath $(project_source)` $(BUILD_MAKE_DIR)/todo.js
+
+$(BUILD_MAKE_DIR)/all.js: | env dir build
+	ln -sf `realpath $(ghcjs_project_out)/all.js` $(BUILD_MAKE_DIR)/all.js
+
+$(BUILD_MAKE_DIR)/all.js.externs: | env dir build
+	ln -sf `realpath $(ghcjs_project_out)/all.js.externs` $(BUILD_MAKE_DIR)/all.js.externs
 
 # add a nodeJS module wrapper http://edsko.net/2015/02/14/atom-haskell/
 # Don't output to src as babel looks in that directory for js files to transpile.
@@ -58,22 +80,20 @@ $(GHCJS_OUT)/all.js.externs: build
 # "ERROR - Closure dependency methods(goog.provide, goog.require, etc)
 # must be called at file scope. "
 # This step also removes the dummy calls to goog.provide and goog.require.
-.build/todo.max.js: $(GHCJS_OUT)/all.js haskell/jsexports/exports.header haskell/jsexports/exports.js
-	mkdir -p .build
-	cat haskell/jsexports/exports.header \
-		<(sed -e '/goog.provide.*/d;/goog.require.*/d' $(GHCJS_OUT)/all.js) \
-		haskell/jsexports/exports.js \
-		> .build/todo.max.js
+$(BUILD_MAKE_DIR)/todo.max.js: $(BUILD_MAKE_DIR)/all.js haskell/jsbits/exports.header.js haskell/jsbits/exports.js | dir
+	cat haskell/jsbits/exports.header.js \
+		<(sed -e '/goog.provide.*/d;/goog.require.*/d' $(BUILD_MAKE_DIR)/all.js) \
+		haskell/jsbits/exports.js \
+		> $(BUILD_MAKE_DIR)/todo.max.js
 
-.build/todo.min.js: .build/react-externs.js $(GHCJS_OUT)/all.js.externs .build/todo.max.js
+$(BUILD_MAKE_DIR)/todo.min.js: $(BUILD_MAKE_DIR)/react-externs.js $(BUILD_MAKE_DIR)/all.js.externs $(BUILD_MAKE_DIR)/todo.max.js | dir
 	closure-compiler \
 		--compilation_level=ADVANCED_OPTIMIZATIONS \
-		--externs .build/react-externs.js \
-		--externs $(GHCJS_OUT)/all.js.externs \
+		--externs $(BUILD_MAKE_DIR)/all.js.externs \
+		$(foreach extern, $(EXTERNS),--externs $(extern)) \
 		--create_source_map build/todo.min.js.map \
-		--js .build/todo.max.js \
-		--js_output_file .build/todo.min.js
+		--js $(BUILD_MAKE_DIR)/todo.max.js \
+		--js_output_file $(BUILD_MAKE_DIR)/todo.min.js
 
-.build/react-externs.js:
-	mkdir -p .build
-	wget https://raw.githubusercontent.com/steida/react-externs/master/externs.js -O .build/react-externs.js
+$(EXTERNS):
+	wget https://raw.githubusercontent.com/steida/react-externs/master/externs.js -O $(BUILD_MAKE_DIR)/react-externs.js
