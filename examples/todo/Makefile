@@ -70,21 +70,12 @@ $(BUILD_MAKE_DIR)/$(PROJECT_NAME).js: $(project_source) | dir
 $(BUILD_MAKE_DIR)/all.js: | env dir build
 	ln -sf `realpath $(ghcjs_project_out)/all.js` $(BUILD_MAKE_DIR)/all.js
 
-# add a nodeJS module wrapper http://edsko.net/2015/02/14/atom-haskell/
 # Don't output to src as babel looks in that directory for js files to transpile.
 # Babel will freeze trying to transpile ghcjs output.
-# The nodeJS module wrapper will cause closure compiler fails with
-# "ERROR - Closure dependency methods(goog.provide, goog.require, etc)
-# must be called at file scope. "
-# This step also removes the dummy calls to goog.provide and goog.require.
-# $(BUILD_MAKE_DIR)/$(PROJECT_NAME).max.js: $(BUILD_MAKE_DIR)/all.js | dir
-# 	cat <(sed -e '/goog.provide.*/d;/goog.require.*/d' $(BUILD_MAKE_DIR)/all.js) \
-# 		> $(BUILD_MAKE_DIR)/$(PROJECT_NAME).max.js
-
 $(BUILD_MAKE_DIR)/$(PROJECT_NAME).max.js: $(BUILD_MAKE_DIR)/all.js
 	ln -sf `realpath $(BUILD_MAKE_DIR)/all.js` $(BUILD_MAKE_DIR)/$(PROJECT_NAME).max.js
 
-$(BUILD_MAKE_DIR)/$(PROJECT_NAME).min.js: $(EXTERNS) $(BUILD_MAKE_DIR)/$(PROJECT_NAME).max.js | dir
+$(BUILD_MAKE_DIR)/$(PROJECT_NAME).min.js: $(EXTERNS) $(BUILD_MAKE_DIR)/$(PROJECT_NAME).max.js
 	closure-compiler \
 		--compilation_level=ADVANCED_OPTIMIZATIONS \
 		$(foreach extern, $(EXTERNS),--externs $(extern)) \
