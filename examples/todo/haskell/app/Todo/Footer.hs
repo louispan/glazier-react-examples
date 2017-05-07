@@ -108,7 +108,7 @@ instance HasPlan (R.Gizmo Model Plan) where
 instance HasSchema (R.Gizmo Model Plan) where
     schema = R.scene . schema
 
-type Widget = R.Widget Command Action Outline Model Plan
+type Widget = R.Widget () Command Action Outline Model Plan
 widget :: Widget
 widget = R.Widget
     mkModel
@@ -117,7 +117,7 @@ widget = R.Widget
     gadget
 
 -- | This is used by parent components to render this component
-window :: G.WindowT (R.Scene Model Plan) (R.ReactMlT Identity) ()
+window :: G.WindowT (R.Scene Model Plan) R.ReactMl ()
 window = do
     s <- ask
     lift $ R.lf (s ^. component . to JE.toJS')
@@ -126,7 +126,7 @@ window = do
         , ("ref", s ^. onComponentRef . to JE.toJS')
         ]
 
-render :: G.WindowT (R.Scene Model Plan) (R.ReactMlT Identity) ()
+render :: G.WindowT (R.Scene Model Plan) R.ReactMl ()
 render = do
     s <- ask
     lift $ R.bh "footer" [("className", "footer")] $ do
@@ -168,7 +168,7 @@ render = do
 classNames :: [(J.JSString, Bool)] -> JE.JSVar
 classNames = JE.toJS' . J.unwords . fmap fst . P.filter snd
 
-gadget :: G.GadgetT Action (R.Gizmo Model Plan) Identity (D.DList Command)
+gadget :: G.Gadget () Action (R.Gizmo Model Plan) (D.DList Command)
 gadget = do
     a <- ask
     case a of

@@ -63,9 +63,12 @@ $(project_root)/stack.ghcjs.yaml: $(project_root)/stack.yaml  $(project_root)/gh
 $(BUILD_MAKE_DIR):
 	mkdir -p $(BUILD_MAKE_DIR)
 
-$(shell if [ ! $(BUILD_MAKE_DIR)/$(PROJECT_NAME).js -ef $(project_source) ]; then rm -rf $(BUILD_MAKE_DIR)/$(PROJECT_NAME).js; fi)
+# Ensure project.js is the correct version (eg minified).
+$(shell if ! cmp $(BUILD_MAKE_DIR)/$(PROJECT_NAME).js $(project_source); then rm -rf $(BUILD_MAKE_DIR)/$(PROJECT_NAME).js; fi)
+
+# The project.js can't be a symbolic link, otherwise webpack can't resolve dependencies
 $(BUILD_MAKE_DIR)/$(PROJECT_NAME).js: $(project_source) | dir
-	ln -sf `realpath $(project_source)` $(BUILD_MAKE_DIR)/$(PROJECT_NAME).js
+	cp `realpath $(project_source)` $(BUILD_MAKE_DIR)/$(PROJECT_NAME).js
 
 $(BUILD_MAKE_DIR)/all.js: | env dir build
 	ln -sf `realpath $(ghcjs_project_out)/all.js` $(BUILD_MAKE_DIR)/all.js

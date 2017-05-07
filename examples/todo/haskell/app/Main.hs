@@ -15,6 +15,7 @@ import Control.Monad.IO.Class
 import Control.Monad.Morph
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
+import Control.Monad.Trans.Except
 import qualified Data.DList as D
 import Data.Foldable
 import qualified Data.JSString as J
@@ -126,7 +127,10 @@ appProducer
     :: R.GadgetOf TD.App.Widget
     -> PC.Input TD.App.Action
     -> P.Producer' (D.DList TD.App.Command) (StateT (R.GizmoOf TD.App.Widget) STM) ()
-appProducer appGadget input = PM.execInput input (G.runGadgetT (hoist generalize appGadget ))
+appProducer appGadget input = PM.execInput input go'
+  where
+    go = runExceptT (G.runGadgetT (hoist generalize appGadget))
+    go' = either (const mempty) id <$> go
 
 runCommandsPipe
     :: (MonadState (R.GizmoOf TD.App.Widget) io, MonadIO io)

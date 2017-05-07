@@ -127,7 +127,7 @@ instance HasPlan (R.Gizmo Model Plan) where
 instance HasSchema (R.Gizmo Model Plan) where
     schema = R.scene . schema
 
-type Widget = R.Widget Command Action Outline Model Plan
+type Widget = R.Widget () Command Action Outline Model Plan
 widget :: Widget
 widget = R.Widget
     mkModel
@@ -136,7 +136,7 @@ widget = R.Widget
     gadget
 
 -- | This is used by parent components to render this component
-window :: G.WindowT (R.Scene Model Plan) (R.ReactMlT Identity) ()
+window :: G.WindowT (R.Scene Model Plan) R.ReactMl ()
 window = do
     s <- ask
     lift $ R.lf (s ^. component . to JE.toJS')
@@ -146,7 +146,7 @@ window = do
         , ("componentDidUpdate", s ^. onComponentDidUpdate . to JE.toJS')
         ]
 
-render :: G.WindowT (R.Scene Model Plan) (R.ReactMlT Identity) ()
+render :: G.WindowT (R.Scene Model Plan) R.ReactMl ()
 render = do
     s <- ask
     lift $ R.bh "li" [ ("className", classNames [ ("completed", s ^. completed)
@@ -194,7 +194,7 @@ onEditKeyDown' = R.eventHandlerM W.Input.whenKeyDown goLazy
         SetPropertyAction ("value", JE.toJS' J.empty) j
         : maybe [CancelEditAction] (pure . SubmitAction) ms
 
-gadget :: G.GadgetT Action (R.Gizmo Model Plan) Identity (D.DList Command)
+gadget :: G.Gadget () Action (R.Gizmo Model Plan) (D.DList Command)
 gadget = do
     a <- ask
     case a of
