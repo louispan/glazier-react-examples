@@ -168,7 +168,7 @@ render = do
 classNames :: [(J.JSString, Bool)] -> JE.JSVar
 classNames = JE.toJS' . J.unwords . fmap fst . P.filter snd
 
-gadget :: G.Gadget () Action (R.Gizmo Model Plan) (D.DList Command)
+gadget :: G.Gadget Action () (R.Gizmo Model Plan) (D.DList Command)
 gadget = do
     a <- ask
     case a of

@@ -13,6 +13,7 @@ import Control.Lens
 import Control.Monad.Free.Church
 import Control.Monad.IO.Class
 import Control.Monad.Morph
+import Control.Monad.Reader
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Except
@@ -129,8 +130,8 @@ appProducer
     -> P.Producer' (D.DList TD.App.Command) (StateT (R.GizmoOf TD.App.Widget) STM) ()
 appProducer appGadget input = PM.execInput input go'
   where
-    go = runExceptT (G.runGadgetT (hoist generalize appGadget))
-    go' = either (const mempty) id <$> go
+    go = (runExceptT .) . runReaderT . G.runGadgetT $ hoist generalize appGadget
+    go' = fmap (either (const mempty) id) <$> go
 
 runCommandsPipe
     :: (MonadState (R.GizmoOf TD.App.Widget) io, MonadIO io)

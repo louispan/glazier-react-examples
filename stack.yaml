@@ -43,6 +43,8 @@ packages:
   extra-dep: true
 - location: '/Users/louis/repo/js/glazier-react-widget'
   extra-dep: true
+- location: '/Users/louis/repo/hs/pipes-misc'
+  extra-dep: true
 
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
@@ -53,7 +55,7 @@ extra-deps:
 - disposable-0.2.0.4
 - javascript-extras-0.3.0.0
 - ghcjs-base-stub-0.1.0.2
-- pipes-misc-0.3.0.0
+- pipes-misc-0.3.1.0
 - pipes-category-0.2.0.1
 
 # Override default flag values for local packages and extra-deps

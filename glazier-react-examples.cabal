@@ -39,7 +39,7 @@ executable glazier-react-todo
                      , mtl >= 2 && < 3
                      , pipes >= 4 && < 5
                      , pipes-concurrency >= 2 && < 3
-                     , pipes-misc >= 0.2.5 && < 1
+                     , pipes-misc >= 0.3.1 && < 1
                      , stm >= 2.4 && < 3
                      , text >= 1.2 && < 1.3
                      , transformers >= 0.4 && < 0.6

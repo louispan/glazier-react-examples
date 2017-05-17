@@ -58,8 +58,8 @@ data Action
     | ToggleCompletedAction
     | SetCompletedAction Bool
     | DestroyAction
-    | CancelEditAction
-    | SubmitAction J.JSString
+    | CancelEditAction J.JSVal
+    | SubmitAction J.JSVal J.JSString
 
 data Schema = Schema
     { _value :: J.JSString
@@ -110,7 +110,8 @@ mkPlan mm = Plan
     <*> (R.mkHandler $ pure . pure . const ToggleCompletedAction)
     <*> (R.mkHandler $ pure . pure . const StartEditAction)
     <*> (R.mkHandler $ pure . pure . const DestroyAction)
-    <*> (R.mkHandler $ pure . pure . const CancelEditAction)
+    -- <*> (R.mkHandler $ pure . pure . const CancelEditAction)
+    <*> (R.mkHandler onCancelEdit')
     <*> (R.mkHandler onEditKeyDown')
 
 instance CD.Disposing Plan
@@ -185,77 +186,92 @@ render = do
 classNames :: [(J.JSString, Bool)] -> JE.JSVar
 classNames = JE.toJS' . J.unwords . fmap fst . filter snd
 
+whenCancelEdit :: J.JSVal -> MaybeT IO J.JSVal
+whenCancelEdit evt = do
+        sevt <- MaybeT $ pure $ JE.fromJS evt
+        let evt' = R.parseEvent sevt
+        lift $ pure . JE.toJS . R.target $ evt'
+
+onCancelEdit' :: J.JSVal -> MaybeT IO [Action]
+onCancelEdit' = R.eventHandlerM whenCancelEdit goLazy
+  where
+    goLazy :: J.JSVal -> MaybeT IO [Action]
+    goLazy j = pure [CancelEditAction j]
+
 onEditKeyDown' :: J.JSVal -> MaybeT IO [Action]
 onEditKeyDown' = R.eventHandlerM W.Input.whenKeyDown goLazy
   where
     goLazy :: (Maybe J.JSString, J.JSVal) -> MaybeT IO [Action]
     goLazy (ms, j) = pure $
         -- We have finished with the edit input form, reset the input value to keep the DOM clean.
-        SetPropertyAction ("value", JE.toJS' J.empty) j
-        : maybe [CancelEditAction] (pure . SubmitAction) ms
+        maybe [CancelEditAction j] (pure . SubmitAction j) ms
 
-gadget :: G.Gadget () Action (R.Gizmo Model Plan) (D.DList Command)
+gadget :: G.Gadget Action () (R.Gizmo Model Plan) (D.DList Command)
 gadget = do
     a <- ask
-    case a of
+    case a
         -- common widget actions
-
+          of
         ComponentRefAction node -> do
             componentRef .= node
             pure mempty
-
         RenderAction ->
             D.singleton <$> R.basicRenderCmd frameNum componentRef RenderCommand
-
-        ComponentDidUpdateAction -> do
+        ComponentDidUpdateAction
             -- Run delayed action that need to wait until frame is re-rendered
             -- Eg focusing after other rendering changes
+         -> do
             focus' <- use autoFocusEdit
             autoFocusEdit .= False
             -- Focus after rendering changed because a new input element might have been rendered
-            ret <- runMaybeT $ do
-                guard focus'
-                input <- use editRef
-                input' <- MaybeT $ pure $ JE.fromJS input
-                pure $ D.singleton $ FocusNodeCommand input'
+            ret <-
+                runMaybeT $ do
+                    guard focus'
+                    input <- use editRef
+                    input' <- MaybeT $ pure $ JE.fromJS input
+                    pure $ D.singleton $ FocusNodeCommand input'
             maybe (pure mempty) pure ret
-
-        SetPropertyAction props j -> pure $ D.singleton $ SetPropertyCommand props j
-
+        SetPropertyAction props j ->
+            pure $ D.singleton $ SetPropertyCommand props j
         EditRefAction v -> do
             editRef .= v
             pure mempty
-
         ToggleCompletedAction -> do
             completed %= not
             D.singleton <$> R.basicRenderCmd frameNum componentRef RenderCommand
-
         SetCompletedAction b -> do
             completed .= b
             D.singleton <$> R.basicRenderCmd frameNum componentRef RenderCommand
-
         StartEditAction -> do
-            ret <- runMaybeT $ do
-                b <- use completed
-                guard (not b)
-                editing .= True
+            ret <-
+                runMaybeT $ do
+                    b <- use completed
+                    guard (not b)
+                    editing .= True
                 -- Need to delay focusing until after the next render
-                autoFocusEdit .= True
-                D.singleton <$> R.basicRenderCmd frameNum componentRef RenderCommand
+                    autoFocusEdit .= True
+                    D.singleton <$>
+                        R.basicRenderCmd frameNum componentRef RenderCommand
             maybe (pure mempty) pure ret
-
         -- parent widgets should detect this case to do something with submitted action
         DestroyAction -> pure mempty
-
-        CancelEditAction -> do
+        CancelEditAction j -> do
             editing .= False
-            D.singleton <$> R.basicRenderCmd frameNum componentRef RenderCommand
-
-        SubmitAction v -> do
+            cmd <- R.basicRenderCmd frameNum componentRef RenderCommand
+            pure $ D.fromList
+                    [ SetPropertyCommand ("value", JE.toJS' J.empty) j
+                    , cmd
+                    ]
+        SubmitAction j v
             -- trim the text
+         -> do
             let v' = J.strip v
             value .= v'
             editing .= False
-            if J.null v'
-                then pure $ D.singleton $ SendDestroyActionCommand
-                else D.singleton <$> R.basicRenderCmd frameNum componentRef RenderCommand
+            cmd <- if J.null v'
+                      then pure SendDestroyActionCommand
+                      else R.basicRenderCmd frameNum componentRef RenderCommand
+            pure $ D.fromList
+                    [ SetPropertyCommand ("value", JE.toJS' J.empty) j
+                    , cmd
+                    ]
