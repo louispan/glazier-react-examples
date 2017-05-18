@@ -41,6 +41,7 @@ import qualified Glazier.React.Component as R
 import qualified Glazier.React.Maker as R
 import qualified Glazier.React.Markup as R
 import qualified Glazier.React.Model as R
+import qualified Glazier.React.Gadgets.Property as G.Property
 import qualified Glazier.React.Widget as R
 import qualified Glazier.React.Widgets.Input as W.Input
 import qualified Glazier.React.Widgets.List as W.List
@@ -55,7 +56,7 @@ data Command
     = RenderCommand (R.Gizmo Model Plan) [JE.Property] J.JSVal
     | SendTodosActionsCommand [W.List.Action TodosKey TD.Todo.Widget]
     | SendFooterActionCommand TD.Footer.Action
-    | InputCommand W.Input.Command
+    | InputCommand G.Property.Command
     | TodosCommand (W.List.Command TodosKey TD.Todo.Widget)
     | FooterCommand TD.Footer.Command
 
@@ -236,7 +237,7 @@ gadget separator = do
             cmds <- todosGadget separator
             ts <- use (todos . W.List.items)
             -- if ts is now empty, we need to render app again (to hide todo list & footer)
-            cmds' <- if (null ts)
+            cmds' <- if null ts
                 then D.singleton <$> R.basicRenderCmd frameNum componentRef RenderCommand
                 else pure mempty
             cmds'' <- updateFooterGadget
@@ -246,7 +247,7 @@ gadget separator = do
             ts <- use (todos . W.List.items)
             cmds <- todosGadget separator
             -- if ts was empty, we need to render app again (to hide todo list & footer)
-            cmds' <- if (null ts)
+            cmds' <- if null ts
                 then D.singleton <$> R.basicRenderCmd frameNum componentRef RenderCommand
                 else pure mempty
             cmds'' <- updateFooterGadget
@@ -298,7 +299,11 @@ gadget separator = do
             else mempty
 
 inputGadget :: G.Gadget Action () (R.Gizmo Model Plan) (D.DList Command)
-inputGadget = fmap InputCommand <$> magnify _InputAction (zoom input (R.gadget W.Input.widget))
+inputGadget = fmap InputCommand <$> magnify _InputAction (zoom input (W.Input.resetGadget go))
+  where
+    go ( W.Input.SubmitAction j _) = Just j
+    go ( W.Input.CancelAction j) = Just j
+    go _ = Nothing
 
 todosGadget :: R.ReactMl () -> G.Gadget Action () (R.Gizmo Model Plan) (D.DList Command)
 todosGadget separator = fmap TodosCommand <$> magnify _TodosAction (zoom todos
