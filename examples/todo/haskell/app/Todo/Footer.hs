@@ -108,7 +108,7 @@ instance HasPlan (R.Gizmo Model Plan) where
 instance HasSchema (R.Gizmo Model Plan) where
     schema = R.scene . schema
 
-type Widget = R.Widget () Command Action Outline Model Plan
+type Widget = R.Widget Action () Outline Model Plan Command
 widget :: Widget
 widget = R.Widget
     mkModel

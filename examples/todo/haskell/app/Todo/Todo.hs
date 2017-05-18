@@ -128,7 +128,7 @@ instance HasPlan (R.Gizmo Model Plan) where
 instance HasSchema (R.Gizmo Model Plan) where
     schema = R.scene . schema
 
-type Widget = R.Widget () Command Action Outline Model Plan
+type Widget = R.Widget Action () Outline Model Plan Command
 widget :: Widget
 widget = R.Widget
     mkModel
@@ -186,14 +186,9 @@ render = do
 classNames :: [(J.JSString, Bool)] -> JE.JSVar
 classNames = JE.toJS' . J.unwords . fmap fst . filter snd
 
-whenCancelEdit :: J.JSVal -> MaybeT IO J.JSVal
-whenCancelEdit evt = do
-        sevt <- MaybeT $ pure $ JE.fromJS evt
-        let evt' = R.parseEvent sevt
-        lift $ pure . JE.toJS . R.target $ evt'
 
 onCancelEdit' :: J.JSVal -> MaybeT IO [Action]
-onCancelEdit' = R.eventHandlerM whenCancelEdit goLazy
+onCancelEdit' = R.eventHandlerM W.Input.whenBlur goLazy
   where
     goLazy :: J.JSVal -> MaybeT IO [Action]
     goLazy j = pure [CancelEditAction j]
@@ -201,8 +196,8 @@ onCancelEdit' = R.eventHandlerM whenCancelEdit goLazy
 onEditKeyDown' :: J.JSVal -> MaybeT IO [Action]
 onEditKeyDown' = R.eventHandlerM W.Input.whenKeyDown goLazy
   where
-    goLazy :: (Maybe J.JSString, J.JSVal) -> MaybeT IO [Action]
-    goLazy (ms, j) = pure $
+    goLazy :: (J.JSVal, Maybe J.JSString) -> MaybeT IO [Action]
+    goLazy (j, ms) = pure $
         -- We have finished with the edit input form, reset the input value to keep the DOM clean.
         maybe [CancelEditAction j] (pure . SubmitAction j) ms
 

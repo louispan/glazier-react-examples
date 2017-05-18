@@ -13,10 +13,10 @@ import Control.Lens
 import Control.Monad.Free.Church
 import Control.Monad.IO.Class
 import Control.Monad.Morph
-import Control.Monad.Reader
 import Control.Monad.State.Strict
-import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Except
+import Control.Monad.Trans.Maybe
+import Control.Monad.Trans.Reader
 import qualified Data.DList as D
 import Data.Foldable
 import qualified Data.JSString as J
