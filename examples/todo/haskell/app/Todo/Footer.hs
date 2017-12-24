@@ -108,7 +108,7 @@ instance HasPlan (R.Gizmo Model Plan) where
 instance HasSchema (R.Gizmo Model Plan) where
     schema = R.scene . schema
 
-type Widget = R.Widget Action () Outline Model Plan Command
+type Widget = R.Widget Action Outline Model Plan Command
 widget :: Widget
 widget = R.Widget
     mkModel
@@ -168,7 +168,7 @@ render = do
 classNames :: [(J.JSString, Bool)] -> JE.JSVar
 classNames = JE.toJS' . J.unwords . fmap fst . P.filter snd
 
-gadget :: G.Gadget Action () (R.Gizmo Model Plan) (D.DList Command)
+gadget :: G.Gadget Action (R.Gizmo Model Plan) (D.DList Command)
 gadget = do
     a <- ask
     case a of

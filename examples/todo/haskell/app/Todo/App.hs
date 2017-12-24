@@ -126,7 +126,7 @@ instance HasPlan (R.Gizmo Model Plan) where
 instance HasSchema (R.Gizmo Model Plan) R.GizmoType where
     schema = R.scene . schema
 
-type Widget = R.Widget Action () Outline Model Plan Command
+type Widget = R.Widget Action Outline Model Plan Command
 widget :: R.ReactMl () -> Widget
 widget separator = R.Widget
     (mkModel separator)
@@ -192,13 +192,13 @@ todoListWindow separator = magnify (todos . R.scene) (R.window (W.List.widget se
 footerWindow :: G.WindowT (R.Scene Model Plan) R.ReactMl ()
 footerWindow = magnify (footer . R.scene) (R.window TD.Footer.widget)
 
-updateFooterGadget :: G.Gadget Action () (R.Gizmo Model Plan) (D.DList Command)
+updateFooterGadget :: G.Gadget Action (R.Gizmo Model Plan) (D.DList Command)
 updateFooterGadget = do
     (active, completed) <- use (todos . W.List.items . to (M.partition (isActiveTodo . R.outline)))
     pure $ D.singleton $ SendFooterActionCommand
                 (TD.Footer.SetCountsAction (length active) (length completed))
 
-gadget :: R.ReactMlT Identity () -> G.Gadget Action () (R.Gizmo Model Plan) (D.DList Command)
+gadget :: R.ReactMlT Identity () -> G.Gadget Action (R.Gizmo Model Plan) (D.DList Command)
 gadget separator = do
     a <- ask
     case a of
@@ -298,16 +298,16 @@ gadget separator = do
             then D.singleton $ W.List.ItemAction k (TD.Todo.SetCompletedAction b)
             else mempty
 
-inputGadget :: G.Gadget Action () (R.Gizmo Model Plan) (D.DList Command)
+inputGadget :: G.Gadget Action (R.Gizmo Model Plan) (D.DList Command)
 inputGadget = fmap InputCommand <$> magnify _InputAction (zoom input (W.Input.resetGadget go))
   where
     go ( W.Input.SubmitAction j _) = Just j
     go ( W.Input.CancelAction j) = Just j
     go _ = Nothing
 
-todosGadget :: R.ReactMl () -> G.Gadget Action () (R.Gizmo Model Plan) (D.DList Command)
+todosGadget :: R.ReactMl () -> G.Gadget Action (R.Gizmo Model Plan) (D.DList Command)
 todosGadget separator = fmap TodosCommand <$> magnify _TodosAction (zoom todos
                                                          (R.gadget (W.List.widget separator TD.Todo.widget)))
 
-footerGadget :: G.Gadget Action () (R.Gizmo Model Plan) (D.DList Command)
+footerGadget :: G.Gadget Action (R.Gizmo Model Plan) (D.DList Command)
 footerGadget = fmap FooterCommand <$> magnify _FooterAction (zoom footer (R.gadget TD.Footer.widget))

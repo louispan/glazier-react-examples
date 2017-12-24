@@ -5,18 +5,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 
 module Todo.Todo
     ( Command(..)
     , Action(..)
-    , AsAction(..)
     , Schema(..)
     , HasSchema(..)
     , Plan(..)
     , HasPlan(..)
     , Outline
-    , Model
+    , Detail
     , Widget
     , widget
     ) where
@@ -32,14 +30,8 @@ import qualified GHC.Generics as G
 import qualified GHCJS.Foreign.Callback as J
 import qualified GHCJS.Types as J
 import qualified Glazier as G
-import qualified Glazier.React.Command as R
-import qualified Glazier.React.Component as R
-import qualified Glazier.React.Event as R
-import qualified Glazier.React.Maker as R
-import qualified Glazier.React.Markup as R
-import qualified Glazier.React.Model as R
-import qualified Glazier.React.Widget as R
-import qualified Glazier.React.Widgets.Input as W.Input
+import qualified Glazier.React.Component.Display as R.Component
+import qualified Glazier.React.Commands.Property as C.Property
 import qualified JavaScript.Extras as JE
 
 data Command
@@ -128,7 +120,7 @@ instance HasPlan (R.Gizmo Model Plan) where
 instance HasSchema (R.Gizmo Model Plan) where
     schema = R.scene . schema
 
-type Widget = R.Widget Action () Outline Model Plan Command
+type Widget = R.Widget Action Outline Model Plan Command
 widget :: Widget
 widget = R.Widget
     mkModel
@@ -201,7 +193,7 @@ onEditKeyDown' = R.eventHandlerM W.Input.whenKeyDown goLazy
         -- We have finished with the edit input form, reset the input value to keep the DOM clean.
         maybe [CancelEditAction j] (pure . SubmitAction j) ms
 
-gadget :: G.Gadget Action () (R.Gizmo Model Plan) (D.DList Command)
+gadget :: G.Gadget Action (R.Gizmo Model Plan) (D.DList Command)
 gadget = do
     a <- ask
     case a

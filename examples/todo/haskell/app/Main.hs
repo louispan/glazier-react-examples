@@ -14,12 +14,12 @@ import Control.Monad.Free.Church
 import Control.Monad.IO.Class
 import Control.Monad.Morph
 import Control.Monad.State.Strict
-import Control.Monad.Trans.Except
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Reader
 import qualified Data.DList as D
 import Data.Foldable
 import qualified Data.JSString as J
+import Data.Maybe
 import qualified GHCJS.Foreign.Callback as J
 import qualified GHCJS.Marshal.Pure as J
 import qualified GHCJS.Types as J
@@ -130,8 +130,8 @@ appProducer
     -> P.Producer' (D.DList TD.App.Command) (StateT (R.GizmoOf TD.App.Widget) STM) ()
 appProducer appGadget input = PM.execInput input go'
   where
-    go = (runExceptT .) . runReaderT . G.runGadgetT $ hoist generalize appGadget
-    go' = fmap (either (const mempty) id) <$> go
+    go = (runMaybeT .) . runReaderT . G.runGadgetT $ hoist generalize appGadget
+    go' = fmap (fromMaybe mempty) <$> go
 
 runCommandsPipe
     :: (MonadState (R.GizmoOf TD.App.Widget) io, MonadIO io)
