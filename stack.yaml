@@ -43,6 +43,8 @@ packages:
   extra-dep: true
 - location: '/Users/louis/repo/js/javascript-extras'
   extra-dep: true
+- location: '/Users/louis/repo/hs/disposable'
+  extra-dep: true
 # - location: '/Users/louis/repo/hs/data-diverse'
 #   extra-dep: true
 # - location: '/Users/louis/repo/hs/data-diverse-lens'

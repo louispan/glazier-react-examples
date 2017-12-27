@@ -10,6 +10,7 @@
 
 module Todo.Todo where
 
+import qualified Control.Disposable as CD
 import Control.Lens
 import Data.Generics.Product
 import Data.Diverse.Profunctor
@@ -41,14 +42,16 @@ import qualified JavaScript.Extras as JE
 --     | CancelEditAction J.JSVal
 --     | SubmitAction J.JSVal J.JSString
 
-data TodoPlan = TodoPlan
+data TodoInfo = TodoInfo
     { value :: J.JSString
     , completed :: Bool
     , editing :: Bool
     , autoFocusEdit :: Bool
     } deriving G.Generic
 
-data TodoReact = TodoReact
+instance CD.Dispose TodoInfo
+
+data TodoPlan = TodoPlan
     { fireToggleComplete :: Maybe (J.Callback (J.JSVal -> IO ()))
     , fireStartEdit :: Maybe (J.Callback (J.JSVal -> IO ()))
     , fireDestroy :: Maybe (J.Callback (J.JSVal -> IO ()))
@@ -56,10 +59,12 @@ data TodoReact = TodoReact
     , onEditKeyDown :: Maybe (J.Callback (J.JSVal -> IO ()))
     , onComponentRef :: Maybe (J.Callback (J.JSVal -> IO ()))
     , onEditRef :: Maybe (J.Callback (J.JSVal -> IO ()))
-    , _onEditKeyDown :: Maybe (J.Callback (J.JSVal -> IO ()))
     } deriving G.Generic
 
-type TodoModel = (TodoPlan, TodoReact)
+instance CD.Dispose TodoPlan
+
+
+type TodoModel = (TodoPlan, TodoInfo)
 
 
 -- type Model = Schema
@@ -131,32 +136,32 @@ type TodoModel = (TodoPlan, TodoReact)
 --     window
 --     gadget
 
-todoDisplay :: ( R.MonadReactor x m, HasItem' TodoModel ss) => F.Display m (F.ComponentModel, ss) ()
-todoDisplay = F.Display $ \(cm, ss) -> do
-    let (p, r) = ss ^. item' @TodoModel
+todoDisplay :: ( R.MonadReactor x m, HasItem' TodoModel ss) => F.Display m (F.ComponentPlan, ss) ()
+todoDisplay = F.Display $ \(cp, ss) -> do
+    let (p, i) = ss ^. item' @TodoModel
     R.bh "div" []
-        [ ("className", JE.classNames [ ("completed", p ^. field @"completed")
-                                   , ("editing", p ^. field @"editing")])
+        [ ("className", JE.classNames [ ("completed", i ^. field @"completed")
+                                      , ("editing", i ^. field @"editing")])
         ] $ do
        R.bh "div" [] [ ("key", "view")
                      , ("className", "view")
                      ] $ do
             R.lf "input"
-                (JE.justSnds $ [ ("onChange", r ^. field @"fireToggleComplete")
-                ])
+                (JE.justSnds $ [ ("onChange", p ^. field @"fireToggleComplete")
+                               ])
                 [ ("key", "toggle")
                 , ("className", "toggle")
                 , ("type", "checkbox")
-                , ("checked", p ^. field @"completed" . to JE.toJS')
+                , ("checked", i ^. field @"completed" . to JE.toJS')
                 ]
             R.bh "label"
-                (JE.justSnds $ [ ("onDoubleClick", r ^. field @"fireStartEdit")
-                ])
+                (JE.justSnds $ [ ("onDoubleClick", p ^. field @"fireStartEdit")
+                               ])
                 [ ("key", "label")
-                ] (p ^. field @"value" . to R.txt)
+                ] (i ^. field @"value" . to R.txt)
             R.lf "button"
-                (JE.justSnds $ [ ("onClick", r ^. field @"fireDestroy")
-                ])
+                (JE.justSnds $ [ ("onClick", p ^. field @"fireDestroy")
+                               ])
                 [ ("key", "destroy")
                 , ("className", "destroy")
                 ]
@@ -164,17 +169,17 @@ todoDisplay = F.Display $ \(cm, ss) -> do
        -- in order for react to use the new defaultValue
        R.lf "input"
            (JE.justSnds $
-               [ ("ref", r ^. field @"onEditRef")
-               , ("onBlur", r ^. field @"fireCancelEdit")
-               , ("onKeyDown", r ^. field @"onEditKeyDown")
+               [ ("ref", p ^. field @"onEditRef")
+               , ("onBlur", p ^. field @"fireCancelEdit")
+               , ("onKeyDown", p ^. field @"onEditKeyDown")
                ])
            [ ("key", JE.toJS' $ J.unwords
-                                       [ cm ^. field @"key" . to R.runReactKey
-                                       , cm ^. field @"frameNum" . to show . to J.pack
+                                       [ cp ^. field @"key" . to R.runReactKey
+                                       , cp ^. field @"frameNum" . to show . to J.pack
                                        ])
            , ("className", "edit")
-           , ("defaultValue", p ^. field @"value" . to JE.toJS')
-           , ("defaultChecked", p ^. field @"completed" . to JE.toJS')
+           , ("defaultValue", i ^. field @"value" . to JE.toJS')
+           , ("defaultChecked", i ^. field @"completed" . to JE.toJS')
            ]
 
 

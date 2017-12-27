@@ -30,6 +30,7 @@ executable glazier-react-todo
                      , containers >= 0.5
                      , data-diverse >= 2.0.1.0
                      , data-diverse-lens >= 2.1.0.0
+                     , disposable >= 0.3.0.0
                      , dlist >= 0.8
                      , generic-lens >= 0.5.0.0
                      , glazier-react >= 0.7
