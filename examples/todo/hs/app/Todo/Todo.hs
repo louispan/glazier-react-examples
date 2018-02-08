@@ -5,23 +5,30 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Todo.Todo where
 
 import Control.Lens
-import Data.Generics.Product
 import Data.Diverse.Profunctor
-import Data.IORef
 import qualified Data.DList as DL
+import Data.Generics.Product
+import Data.IORef
 import qualified Data.JSString as J
+import Data.Tagged
 import qualified GHC.Generics as G
 import qualified GHCJS.Foreign.Callback as J
 import qualified GHCJS.Types as J
 import qualified Glazier.React as R
+import qualified Glazier.React.Commands as C
 import qualified Glazier.React.Framework as F
+import qualified Glazier.React.Framework.Prototype as F.Prototype
+import qualified Glazier.React.Prototypes as W
 import qualified JavaScript.Extras as JE
+import qualified Parameterized.Data.Monoid as P
+import qualified Parameterized.TypeLevel as P
 
 data TodoEditRef = TodoEditRef J.JSVal
 
@@ -91,14 +98,14 @@ whenTodoEditRef ref this (TodoEditRef j) = do
 todoDisplay :: ( R.MonadReactor x m, HasItem' TodoModel ss) => F.Display m (F.ComponentPlan x m, ss) ()
 todoDisplay = F.Display $ \(cp, ss) -> do
     let (p, i) = ss ^. item' @TodoModel
-    R.bh "div" []
+    R.branch "div" []
         [ ("className", JE.classNames [ ("completed", completed i)
                                       , ("editing", editing i)])
         ] $ do
-       R.bh "div" [] [ ("key", "view")
+       R.branch "div" [] [ ("key", "view")
                      , ("className", "view")
                      ] $ do
-            R.lf "input"
+            R.leaf "input"
                 (JE.justSnds $ [ ("onChange", onToggleComplete p)
                                ])
                 [ ("key", "toggle")
@@ -106,12 +113,12 @@ todoDisplay = F.Display $ \(cp, ss) -> do
                 , ("type", "checkbox")
                 , ("checked", JE.toJS' $ completed i)
                 ]
-            R.bh "label"
+            R.branch "label"
                 (JE.justSnds $ [ ("onDoubleClick", onStartEdit p)
                                ])
                 [ ("key", "label")
                 ] (R.txt $ value i)
-            R.lf "button"
+            R.leaf "button"
                 (JE.justSnds $ [ ("onClick", onDestroy p)
                                ])
                 [ ("key", "destroy")
@@ -119,7 +126,7 @@ todoDisplay = F.Display $ \(cp, ss) -> do
                 ]
        -- For uncontrolled components, we need to generate a new key per render
        -- in order for react to use the new defaultValue
-       R.lf "input"
+       R.leaf "input"
            (JE.justSnds $
                [ ("ref", onEditRef p)
                , ("onBlur", onCancelEdit p)
@@ -134,7 +141,53 @@ todoDisplay = F.Display $ \(cp, ss) -> do
            , ("defaultChecked", JE.toJS' $ completed i)
            ]
 
+data TodoCheckbox
 
+checkbox ::
+    ( HasItemTag' TodoCheckbox [R.Listener] s
+    , HasItem' TodoInfo s
+    , R.MonadReactor x m
+    )
+    => F.Prototype x m v i s
+        (Many '[])
+        (Many '[Tagged TodoCheckbox [R.Listener]])
+        (Which '[]) (Which '[])
+        (Which '[]) (Which '[])
+checkbox = F.widget @TodoCheckbox "input"
+    (\s -> [ ("key", "toggle")
+        , ("className", "toggle")
+        , ("type", "checkbox")
+        , ("checked", JE.toJS' . completed $ view item' s)])
+    P.pmempty
+
+wack ::
+    ( HasItemTag' TodoCheckbox [R.Listener] s
+    , HasItem' TodoInfo s
+    , R.MonadReactor x m
+    ) => F.ProtoActivator x m v s C.Rerender
+wack = F.controlledTrigger' @TodoCheckbox
+          "onChange"
+          (const . pure $ DL.singleton ())
+          (F.delegate (F.Handler whenChange))
+  where
+    whenChange ::
+        (R.MonadReactor x m, HasItem' TodoInfo s)
+        => F.ComObject x m v s
+        -> ()
+        -> m (DL.DList C.Rerender)
+    whenChange (F.Object ref (Lens this)) _ = do
+            R.doModifyIORef' ref (this._2.item' @TodoInfo .field @"completed" %~ not)
+            C.mkRerender' ref this
+
+
+
+-- wock = F.withExecutor pickOnly wack
+
+-- wock ::
+--     ( HasItemTag' TodoCheckbox [R.Listener] s
+--     , HasItem' TodoInfo s
+--     , R.MonadReactor x m
+--     ) => F.ExObjActivator m v (F.ComponentPlan x m, s) x (Which '[C.Rerender])
 
 -- onCancelEdit' :: J.JSVal -> MaybeT IO [Action]
 -- onCancelEdit' = R.eventHandlerM W.Input.whenBlur goLazy
