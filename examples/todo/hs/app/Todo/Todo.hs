@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -24,7 +25,6 @@ import qualified GHCJS.Types as J
 import qualified Glazier.React as R
 import qualified Glazier.React.Commands as C
 import qualified Glazier.React.Framework as F
-import qualified Glazier.React.Framework.Prototype as F.Prototype
 import qualified Glazier.React.Prototypes as W
 import qualified JavaScript.Extras as JE
 import qualified Parameterized.Data.Monoid as P
@@ -151,25 +151,27 @@ checkbox ::
     => F.Prototype x m v i s
         (Many '[])
         (Many '[Tagged TodoCheckbox [R.Listener]])
-        (Which '[]) (Which '[])
-        (Which '[]) (Which '[])
+        (Which '[C.Rerender])
+        (Which '[])
+        (Which '[])
+        (Which '[])
 checkbox = F.widget @TodoCheckbox "input"
-    (\s -> [ ("key", "toggle")
+    (\s ->
+        [ ("key", "toggle")
         , ("className", "toggle")
         , ("type", "checkbox")
         , ("checked", JE.toJS' . completed $ view item' s)])
-    P.pmempty
-
-wack ::
-    ( HasItemTag' TodoCheckbox [R.Listener] s
-    , HasItem' TodoInfo s
-    , R.MonadReactor x m
-    ) => F.ProtoActivator x m v s C.Rerender
-wack = F.controlledTrigger' @TodoCheckbox
-          "onChange"
-          (const . pure $ DL.singleton ())
-          (F.delegate (F.Handler whenChange))
+    (P.pmempty { F.activator = onChange })
   where
+    onChange ::
+        ( HasItemTag' TodoCheckbox [R.Listener] s
+        , HasItem' TodoInfo s
+        , R.MonadReactor x m
+        ) => F.ProtoActivator x m v s (Which '[C.Rerender])
+    onChange = F.withExecutor pickOnly $ F.controlledTrigger' @TodoCheckbox
+            "onChange"
+            (const . pure $ DL.singleton ())
+            (F.delegate (F.Handler whenChange))
     whenChange ::
         (R.MonadReactor x m, HasItem' TodoInfo s)
         => F.ComObject x m v s
@@ -179,9 +181,51 @@ wack = F.controlledTrigger' @TodoCheckbox
             R.doModifyIORef' ref (this._2.item' @TodoInfo .field @"completed" %~ not)
             C.mkRerender' ref this
 
-
-
+-- wock ::
+--     ( HasItemTag' TodoCheckbox [R.Listener] s
+--     , HasItem' TodoInfo s
+--     , R.MonadReactor x m
+--     ) => F.ProtoActivator x m v s (Which '[C.Rerender])
 -- wock = F.withExecutor pickOnly wack
+
+-- wick :: ( HasItemTag' TodoCheckbox [R.Listener] s
+--     , HasItem' TodoInfo s
+--     , R.MonadReactor x m
+--     ) => F.Prototype.Prototype
+--                        x
+--                        m
+--                        v
+--                        i
+--                        s
+--                        (Many '[])
+--                        (Many '[])
+--                        (Which '[C.Rerender])
+--                        (Which '[])
+--                        (Which '[])
+--                        (Which '[])
+-- wick = F.Prototype
+--     P.pmempty
+--     mempty
+--     mempty
+--     wock
+--     P.pmempty
+
+-- wick2 :: ( HasItemTag' TodoCheckbox [R.Listener] s
+--     , HasItem' TodoInfo s
+--     , R.MonadReactor x m
+--     ) => F.Prototype.Prototype
+--                        x
+--                        m
+--                        v
+--                        i
+--                        s
+--                        (Many '[])
+--                        (Many '[])
+--                        (Which '[C.Rerender])
+--                        (Which '[])
+--                        (Which '[])
+--                        (Which '[])
+-- wick2 = P.pmempty { F.Prototype.activator = wock }
 
 -- wock ::
 --     ( HasItemTag' TodoCheckbox [R.Listener] s
