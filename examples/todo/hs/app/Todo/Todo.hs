@@ -19,13 +19,13 @@ import Data.Generics.Product
 import Data.IORef
 import qualified Data.JSString as J
 import Data.Tagged
+import Data.Void
 import qualified GHC.Generics as G
 import qualified GHCJS.Foreign.Callback as J
 import qualified GHCJS.Types as J
 import qualified Glazier.React as R
-import qualified Glazier.React.Commands as C
 import qualified Glazier.React.Framework as F
-import qualified Glazier.React.Prototypes as W
+import qualified Glazier.React.Widget as W
 import qualified JavaScript.Extras as JE
 import qualified Parameterized.Data.Monoid as P
 import qualified Parameterized.TypeLevel as P
@@ -87,15 +87,14 @@ type TodoModel = (TodoPlan, TodoInfo)
 
 
 whenTodoEditRef :: (R.MonadReactor x m)
-  => IORef v
-  -> Lens' v (F.ComponentPlan x m, TodoModel)
+  => F.Scene x m v TodoModel
   -> TodoEditRef
-  -> m (DL.DList c)
-whenTodoEditRef ref this (TodoEditRef j) = do
-       R.doModifyIORef' ref (set' (this._2._1.field @"editRef") j)
+  -> m (DL.DList Void)
+whenTodoEditRef (F.Obj ref (Lens its)) (TodoEditRef j) = do
+       R.doModifyIORef' ref (set' (its._2._1.field @"editRef") j)
        pure mempty
 
-todoDisplay :: ( R.MonadReactor x m, HasItem' TodoModel ss) => F.Display m (F.ComponentPlan x m, ss) ()
+todoDisplay :: ( R.MonadReactor x m, HasItem' TodoModel ss) => F.PlanDisplay x m ss ()
 todoDisplay = F.Display $ \(cp, ss) -> do
     let (p, i) = ss ^. item' @TodoModel
     R.branch "div" []
@@ -151,7 +150,7 @@ checkbox ::
     => F.Prototype x m v i s
         (Many '[])
         (Many '[Tagged TodoCheckbox [R.Listener]])
-        (Which '[C.Rerender])
+        (Which '[])
         (Which '[])
         (Which '[])
         (Which '[])
@@ -167,19 +166,20 @@ checkbox = F.widget @TodoCheckbox "input"
         ( HasItemTag' TodoCheckbox [R.Listener] s
         , HasItem' TodoInfo s
         , R.MonadReactor x m
-        ) => F.ProtoActivator x m v s (Which '[C.Rerender])
-    onChange = F.withExecutor pickOnly $ F.controlledTrigger' @TodoCheckbox
+        ) => F.ProtoActivator x m v s (Which '[])
+    onChange = F.withExecutor (absurd @(Which '[])) $ F.controlledTrigger' @TodoCheckbox
             "onChange"
             (const . pure $ DL.singleton ())
             (F.delegate (F.Handler whenChange))
     whenChange ::
         (R.MonadReactor x m, HasItem' TodoInfo s)
-        => F.ComObject x m v s
-        -> ()
-        -> m (DL.DList C.Rerender)
-    whenChange (F.Object ref (Lens this)) _ = do
-            R.doModifyIORef' ref (this._2.item' @TodoInfo .field @"completed" %~ not)
-            C.mkRerender' ref this
+        => F.Scene x m v s
+        -> a
+        -> m (DL.DList Void)
+    whenChange this@(F.Obj ref (Lens its)) _ = do
+        R.doModifyIORef' ref (its._2.item' @TodoInfo .field @"completed" %~ not)
+        F.rerender this
+        pure mempty
 
 -- wock ::
 --     ( HasItemTag' TodoCheckbox [R.Listener] s
