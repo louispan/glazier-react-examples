@@ -161,8 +161,8 @@ todoToggleComplete = F.widget @TodoToggleComplete "input"
         [ ("key", "toggle")
         , ("className", "toggle")
         , ("type", "checkbox")
-        , ("checked", JE.toJS' . completed $ view item' s)])
-    (P.pmempty { F.activator = onChange })
+        , ("checked", JE.toJS' . completed $ s ^. F.model.item')])
+    (F.nilPrototype { F.activator = onChange })
   where
     onChange ::
         ( HasItemTag' TodoToggleComplete [R.Listener] s
@@ -172,13 +172,11 @@ todoToggleComplete = F.widget @TodoToggleComplete "input"
     onChange = F.withExecutor (absurd @(Which '[])) $ F.controlledTrigger' @TodoToggleComplete
             "onChange"
             (const . pure $ DL.singleton ())
-            (F.delegate (F.Handler whenChange))
-    whenChange ::
+            (F.delegate hdlChange)
+    hdlChange ::
         (R.MonadReactor x m, HasItem' TodoInfo s)
-        => F.Scene x m v s
-        -> a
-        -> m (DL.DList Void)
-    whenChange this@(F.Obj ref its) _ = do
+        => F.SceneHandler x m v s a Void
+    hdlChange = F.Handler $ \this@(F.Obj ref its) _ -> do
         R.doModifyIORef' ref (its.F.model.item' @TodoInfo .field @"completed" %~ not)
         F.rerender this
         pure mempty
@@ -200,7 +198,7 @@ todoDestroy = F.widget @TodoDestroy "button"
     (const
         [ ("key", "destroy")
         , ("className", "destroy")])
-    (P.pmempty { F.activator = onClick })
+    (F.nilPrototype { F.activator = onClick })
   where
     onClick ::
         ( HasItemTag' TodoDestroy [R.Listener] s
@@ -228,7 +226,7 @@ todoLabel ::
         (Which '[])
 todoLabel = F.widget @TodoLabel "label"
     (const [ ("key", "label")])
-    (P.pmempty
+    (F.nilPrototype
         { F.display = dis
         , F.activator = onDoubleClick
         })
@@ -267,11 +265,61 @@ todoDiv ::
 todoDiv = let p = todoToggleComplete
                 `P.pmappend` todoDestroy
                 `P.pmappend` todoLabel
-        in p & field @"display" %~ fmap (\x ->
-            R.branch "div" []
-                [ ("key", "view")
-                , ("className", "view")]
-                x)
+    in p & field @"display" %~ fmap (\x ->
+        R.branch "div" []
+            [ ("key", "view")
+            , ("className", "view")]
+            x)
+
+data TodoInput
+data TodoCancelEdit = TodoCancelEdit deriving (G.Generic, NFData)
+
+todoInput ::
+    ( HasItemTag' TodoInput [R.Listener] s
+    , HasItemTag' TodoInput R.EventTarget s
+    , HasItem' TodoInfo s
+    , R.MonadReactor x m
+    )
+    => F.Prototype x m v i s
+        (Many '[])
+        (Many '[Tagged TodoInput [R.Listener], Tagged TodoInput R.EventTarget])
+        (Which '[])
+        (Which '[])
+        (Which '[TodoCancelEdit])
+        (Which '[])
+todoInput = F.widget @TodoInput "input"
+    (\s ->
+        -- For uncontrolled components, we need to generate a new key per render
+        -- in order for react to use the new defaultValue
+        [ ("key", JE.toJS' $ J.unwords
+            [ R.runReactKey . F.key $ s ^. F.plan
+            , J.pack . show . F.frameNum $ s ^. F.plan
+            ])
+        , ("className", "edit")
+        , ("defaultValue", JE.toJS' . value $ s ^. F.model.item')
+        , ("defaultChecked", JE.toJS' . completed $ s ^. F.model.item')])
+    (W.withRef @TodoInput `F.andPrototype` F.nilPrototype
+        { F.activator = onBlur
+        , F.handler = F.delegate hdlBlur })
+  where
+    onBlur ::
+        ( HasItemTag' TodoInput [R.Listener] s
+        , HasItem' TodoInfo s
+        , R.MonadReactor x m
+        ) => F.ProtoActivator x m v s (Which '[])
+    onBlur = F.controlledTrigger' @TodoInput
+            "onBlur"
+            (const . pure $ DL.singleton . pickOnly $ TodoCancelEdit)
+            (F.delegate hdlBlur)
+    hdlBlur ::
+        (R.MonadReactor x m, HasItem' TodoInfo s)
+        => F.SceneHandler x m v s (Which '[TodoCancelEdit]) (Which '[])
+    hdlBlur = F.Handler $ \this@(F.Obj ref its) _ -> do
+        R.doModifyIORef' ref (its.F.model.item' @TodoInfo .field @"completed" %~ not)
+        F.rerender this
+        pure mempty
+
+
 
 -- wock ::
 --     ( HasItemTag' TodoCheckbox [R.Listener] s
