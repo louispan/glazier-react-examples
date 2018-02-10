@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -12,6 +13,7 @@
 
 module Todo.Todo where
 
+import Control.DeepSeq
 import Control.Lens
 import Data.Diverse.Profunctor
 import qualified Data.DList as DL
@@ -90,12 +92,12 @@ whenTodoEditRef :: (R.MonadReactor x m)
   => F.Scene x m v TodoModel
   -> TodoEditRef
   -> m (DL.DList Void)
-whenTodoEditRef (F.Obj ref (Lens its)) (TodoEditRef j) = do
+whenTodoEditRef (F.Obj ref its) (TodoEditRef j) = do
        R.doModifyIORef' ref (set' (its._2._1.field @"editRef") j)
        pure mempty
 
-todoDisplay :: ( R.MonadReactor x m, HasItem' TodoModel ss) => F.PlanDisplay x m ss ()
-todoDisplay = F.Display $ \(cp, ss) -> do
+todoDisplay :: ( R.MonadReactor x m, HasItem' TodoModel ss) => F.FrameDisplay x m ss ()
+todoDisplay (cp, ss) = do
     let (p, i) = ss ^. item' @TodoModel
     R.branch "div" []
         [ ("className", JE.classNames [ ("completed", completed i)
@@ -140,21 +142,21 @@ todoDisplay = F.Display $ \(cp, ss) -> do
            , ("defaultChecked", JE.toJS' $ completed i)
            ]
 
-data TodoCheckbox
+data TodoToggleComplete
 
-checkbox ::
-    ( HasItemTag' TodoCheckbox [R.Listener] s
+todoToggleComplete ::
+    ( HasItemTag' TodoToggleComplete [R.Listener] s
     , HasItem' TodoInfo s
     , R.MonadReactor x m
     )
     => F.Prototype x m v i s
         (Many '[])
-        (Many '[Tagged TodoCheckbox [R.Listener]])
+        (Many '[Tagged TodoToggleComplete [R.Listener]])
         (Which '[])
         (Which '[])
         (Which '[])
         (Which '[])
-checkbox = F.widget @TodoCheckbox "input"
+todoToggleComplete = F.widget @TodoToggleComplete "input"
     (\s ->
         [ ("key", "toggle")
         , ("className", "toggle")
@@ -163,11 +165,11 @@ checkbox = F.widget @TodoCheckbox "input"
     (P.pmempty { F.activator = onChange })
   where
     onChange ::
-        ( HasItemTag' TodoCheckbox [R.Listener] s
+        ( HasItemTag' TodoToggleComplete [R.Listener] s
         , HasItem' TodoInfo s
         , R.MonadReactor x m
         ) => F.ProtoActivator x m v s (Which '[])
-    onChange = F.withExecutor (absurd @(Which '[])) $ F.controlledTrigger' @TodoCheckbox
+    onChange = F.withExecutor (absurd @(Which '[])) $ F.controlledTrigger' @TodoToggleComplete
             "onChange"
             (const . pure $ DL.singleton ())
             (F.delegate (F.Handler whenChange))
@@ -176,10 +178,100 @@ checkbox = F.widget @TodoCheckbox "input"
         => F.Scene x m v s
         -> a
         -> m (DL.DList Void)
-    whenChange this@(F.Obj ref (Lens its)) _ = do
-        R.doModifyIORef' ref (its._2.item' @TodoInfo .field @"completed" %~ not)
+    whenChange this@(F.Obj ref its) _ = do
+        R.doModifyIORef' ref (its.F.model.item' @TodoInfo .field @"completed" %~ not)
         F.rerender this
         pure mempty
+
+data TodoDestroy = TodoDestroy deriving (G.Generic, NFData)
+
+todoDestroy ::
+    ( HasItemTag' TodoDestroy [R.Listener] s
+    , R.MonadReactor x m
+    )
+    => F.Prototype x m v i s
+        (Many '[])
+        (Many '[Tagged TodoDestroy [R.Listener]])
+        (Which '[TodoDestroy])
+        (Which '[])
+        (Which '[])
+        (Which '[])
+todoDestroy = F.widget @TodoDestroy "button"
+    (const
+        [ ("key", "destroy")
+        , ("className", "destroy")])
+    (P.pmempty { F.activator = onClick })
+  where
+    onClick ::
+        ( HasItemTag' TodoDestroy [R.Listener] s
+        , R.MonadReactor x m
+        ) => F.ProtoActivator x m v s (Which '[TodoDestroy])
+    onClick = F.trigger @TodoDestroy
+            "onClick"
+            (const . pure . DL.singleton . pickOnly $ TodoDestroy)
+
+data TodoLabel
+
+data TodoStartEdit = TodoStartEdit deriving (G.Generic, NFData)
+
+todoLabel ::
+    ( HasItemTag' TodoLabel [R.Listener] s
+    , HasItem' TodoInfo s
+    , R.MonadReactor x m
+    )
+    => F.Prototype x m v i s
+        (Many '[])
+        (Many '[Tagged TodoLabel [R.Listener]])
+        (Which '[TodoStartEdit])
+        (Which '[])
+        (Which '[])
+        (Which '[])
+todoLabel = F.widget @TodoLabel "label"
+    (const [ ("key", "label")])
+    (P.pmempty
+        { F.display = dis
+        , F.activator = onDoubleClick
+        })
+  where
+    dis ::
+        ( HasItem' TodoInfo s
+        , R.MonadReactor x m
+        ) => F.FrameDisplay x m s ()
+    dis s =
+        (R.txt (s^.F.model.item' @TodoInfo .field @"value"))
+    onDoubleClick ::
+        ( HasItemTag' TodoLabel [R.Listener] s
+        , R.MonadReactor x m
+        ) => F.ProtoActivator x m v s (Which '[TodoStartEdit])
+    onDoubleClick = F.trigger @TodoLabel
+            "onDoubleClick"
+            (const . pure . DL.singleton . pickOnly $ TodoStartEdit)
+
+todoDiv ::
+    ( HasItemTag' TodoToggleComplete [R.Listener] s
+    , HasItemTag' TodoDestroy [R.Listener] s
+    , HasItemTag' TodoLabel [R.Listener] s
+    , HasItem' TodoInfo s
+    , R.MonadReactor x m
+    )
+    => F.Prototype x m v i s
+        (Many '[])
+        (Many
+            '[Tagged TodoToggleComplete [R.Listener]
+            , Tagged TodoDestroy [R.Listener]
+            , Tagged TodoLabel [R.Listener]])
+        (Which '[TodoDestroy, TodoStartEdit])
+        (Which '[])
+        (Which '[])
+        (Which '[])
+todoDiv = let p = todoToggleComplete
+                `P.pmappend` todoDestroy
+                `P.pmappend` todoLabel
+        in p & field @"display" %~ fmap (\x ->
+            R.branch "div" []
+                [ ("key", "view")
+                , ("className", "view")]
+                x)
 
 -- wock ::
 --     ( HasItemTag' TodoCheckbox [R.Listener] s
