@@ -13,13 +13,20 @@
 
 module Todo.Todo where
 
+import Control.Applicative
+import qualified Control.Category as C
 import Control.DeepSeq
 import Control.Lens
+import Control.Monad
+import Control.Monad.Trans.Class
+import Control.Monad.Trans.Maybe
+import qualified Control.Monad.Trans.Maybe.Extras as TE
 import Data.Diverse.Profunctor
 import qualified Data.DList as DL
 import Data.Generics.Product
 import Data.IORef
 import qualified Data.JSString as J
+import Data.Maybe
 import Data.Tagged
 import Data.Void
 import qualified GHC.Generics as G
@@ -88,13 +95,13 @@ data TodoPlan = TodoPlan
 type TodoModel = (TodoPlan, TodoInfo)
 
 
-whenTodoEditRef :: (R.MonadReactor x m)
-  => F.Scene x m v TodoModel
-  -> TodoEditRef
-  -> m (DL.DList Void)
-whenTodoEditRef (F.Obj ref its) (TodoEditRef j) = do
-       R.doModifyIORef' ref (set' (its._2._1.field @"editRef") j)
-       pure mempty
+-- whenTodoEditRef :: (R.MonadReactor x m)
+--   => F.Scene x m v TodoModel
+--   -> TodoEditRef
+--   -> m (DL.DList (Which '[]))
+-- whenTodoEditRef (F.Obj ref its) (TodoEditRef j) = do
+--        R.doModifyIORef' ref (set' (its._2._1.field @"editRef") j)
+--         pure (mempty @(_ (Which '[])))
 
 todoDisplay :: ( R.MonadReactor x m, HasItem' TodoModel ss) => F.FrameDisplay x m ss ()
 todoDisplay (cp, ss) = do
@@ -169,17 +176,17 @@ todoToggleComplete = F.widget @TodoToggleComplete "input"
         , HasItem' TodoInfo s
         , R.MonadReactor x m
         ) => F.ProtoActivator x m v s (Which '[])
-    onChange = F.withExecutor (absurd @(Which '[])) $ F.controlledTrigger' @TodoToggleComplete
+    onChange = F.controlledTrigger' @TodoToggleComplete
             "onChange"
             (const . pure $ DL.singleton ())
             (F.delegate hdlChange)
     hdlChange ::
         (R.MonadReactor x m, HasItem' TodoInfo s)
-        => F.SceneHandler x m v s a Void
+        => F.SceneHandler x m v s a (Which '[])
     hdlChange = F.Handler $ \this@(F.Obj ref its) _ -> do
         R.doModifyIORef' ref (its.F.model.item' @TodoInfo .field @"completed" %~ not)
         F.rerender this
-        pure mempty
+        pure zilch
 
 data TodoDestroy = TodoDestroy deriving (G.Generic, NFData)
 
@@ -263,13 +270,13 @@ todoDiv ::
         (Which '[])
         (Which '[])
 todoDiv = let p = todoToggleComplete
-                `P.pmappend` todoDestroy
-                `P.pmappend` todoLabel
-    in p & field @"display" %~ fmap (\x ->
+                `F.andPrototype` todoDestroy
+                `F.andPrototype` todoLabel
+    in p & field @"display" %~ fmap (\a ->
         R.branch "div" []
             [ ("key", "view")
             , ("className", "view")]
-            x)
+            a)
 
 data TodoInput
 data TodoCancelEdit = TodoCancelEdit deriving (G.Generic, NFData)
@@ -283,9 +290,9 @@ todoInput ::
     => F.Prototype x m v i s
         (Many '[])
         (Many '[Tagged TodoInput [R.Listener], Tagged TodoInput R.EventTarget])
+        (Which '[TodoDestroy])
         (Which '[])
         (Which '[])
-        (Which '[TodoCancelEdit])
         (Which '[])
 todoInput = F.widget @TodoInput "input"
     (\s ->
@@ -299,8 +306,7 @@ todoInput = F.widget @TodoInput "input"
         , ("defaultValue", JE.toJS' . value $ s ^. F.model.item')
         , ("defaultChecked", JE.toJS' . completed $ s ^. F.model.item')])
     (W.withRef @TodoInput `F.andPrototype` F.nilPrototype
-        { F.activator = onBlur
-        , F.handler = F.delegate hdlBlur })
+        { F.activator = onBlur `F.andExActivator` onKeyDown })
   where
     onBlur ::
         ( HasItemTag' TodoInput [R.Listener] s
@@ -309,17 +315,74 @@ todoInput = F.widget @TodoInput "input"
         ) => F.ProtoActivator x m v s (Which '[])
     onBlur = F.controlledTrigger' @TodoInput
             "onBlur"
-            (const . pure $ DL.singleton . pickOnly $ TodoCancelEdit)
+            (const . pure $ DL.singleton $ TodoCancelEdit)
             (F.delegate hdlBlur)
     hdlBlur ::
         (R.MonadReactor x m, HasItem' TodoInfo s)
-        => F.SceneHandler x m v s (Which '[TodoCancelEdit]) (Which '[])
+        => F.SceneHandler x m v s TodoCancelEdit (Which '[])
     hdlBlur = F.Handler $ \this@(F.Obj ref its) _ -> do
         R.doModifyIORef' ref (its.F.model.item' @TodoInfo .field @"completed" %~ not)
         F.rerender this
-        pure mempty
-
-
+        pure zilch
+    onKeyDown ::
+        ( HasItemTag' TodoInput [R.Listener] s
+        , HasItem' TodoInfo s
+        , R.MonadReactor x m
+        ) => F.ProtoActivator x m v s (Which '[TodoDestroy])
+    onKeyDown = F.controlledTrigger' @TodoInput
+            "onKeyDown"
+            (TE.fromMaybeT . W.fireKeyDownKey)
+            (F.delegate hdlKeyDown)
+    hdlKeyDown ::
+        (R.MonadReactor x m, HasItem' TodoInfo s)
+        => F.SceneHandler x m v s W.KeyDownKey (Which '[TodoDestroy])
+    hdlKeyDown = F.Handler $ \this@(F.Obj ref its) (W.KeyDownKey j k) ->
+        case k of
+            "Enter" -> do
+                v <- JE.fromJS' <$> R.doGetProperty "value" (JE.toJS j)
+                let v' = J.strip $ fromMaybe J.empty v
+                if J.null v'
+                    then
+                        pure . DL.singleton . pickOnly $ TodoDestroy
+                    else do
+                        R.doModifyIORef' ref (\s -> s
+                            & its.F.model.item' @TodoInfo .field @"editing" .~ False
+                            & its.F.model.item' @TodoInfo .field @"value" .~ v'
+                            )
+                        F.rerender this
+                        R.doSetProperty ("value", JE.toJS' J.empty) (JE.toJS j)
+                        pure mempty
+            "Escape" -> do
+                R.doModifyIORef' ref (its.F.model.item' @TodoInfo .field @"editing" .~ False)
+                R.doSetProperty ("value", JE.toJS' J.empty) (JE.toJS j)
+                F.rerender this
+                pure mempty
+            _ -> pure mempty
+    hdlStartEdit ::
+        ( R.MonadReactor x m
+        , HasItem' TodoInfo s
+        , HasItemTag' TodoInput R.EventTarget s)
+        => F.SceneHandler x m v s TodoStartEdit (Which '[])
+    hdlStartEdit = F.Handler $ \this@(F.Obj ref its) _ -> do
+        void $ runMaybeT $ do
+            obj <- lift $ R.doReadIORef ref
+            let b = obj ^. its.F.model.item' @TodoInfo .field @"completed"
+            guard (not b)
+            -- Focus after rendering changed because we are using uncontrollec components
+            -- with a new key. This will result in a different input element after each render
+            lift $ R.doModifyIORef' ref (\s -> s
+                & its.F.model.item' @TodoInfo .field @"editing" .~ True
+                & its.F.plan.field @"afterOnUpdated" %~ (liftA2 (flip const) (focusAfterOnUpdated this))
+                )
+            lift $ F.rerender this
+        pure zilch
+    focusAfterOnUpdated ::
+        ( R.MonadReactor x m
+        , HasItemTag' TodoInput R.EventTarget s)
+        => F.Scene x m v s -> m ()
+    focusAfterOnUpdated (F.Obj ref its) = do
+        obj <- R.doReadIORef ref
+        R.doFocus $ obj ^. its.F.model.itemTag' @TodoInput @R.EventTarget
 
 -- wock ::
 --     ( HasItemTag' TodoCheckbox [R.Listener] s
