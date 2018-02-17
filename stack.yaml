@@ -37,6 +37,8 @@ resolver: lts-7.19
 # will not be run. This is useful for tweaking upstream packages.
 packages:
 - '.'
+- location: '/Users/louis/repo/hs/alternators'
+  extra-dep: true
 - location: '/Users/louis/repo/js/glazier-react'
   extra-dep: true
 - location: '/Users/louis/repo/js/glazier-react-widget'
@@ -61,7 +63,6 @@ packages:
 extra-deps:
 # - glazier-react-0.7.0.0
 # - glazier-react-widget-0.7.0.0
-- alternators-0.1.2.0
 - parameterized-0.5.0.0
 - ghcjs-base-stub-0.1.0.4
 - generic-lens-0.5.1.0
