@@ -336,7 +336,7 @@ todoInput = F.widget @TodoInput "input"
             "Enter" -> (`runContT` pure) $ do
                 -- nested ContT to monadically compose the results of runnings effects
                 -- The final result of the nested ContT must be () so it can be trivally run
-                v <- JE.fromJS' @J.JSString <$> (ContT $ F.doEffect' . F.GetProperty "value" (JE.toJS j))
+                v <- JE.fromJS' @J.JSString <$> (ContT $ F.getProperty "value" (JE.toJS j))
                 let v' = J.strip $ fromMaybe J.empty v
                 lift $ if J.null v'
                     then
@@ -345,7 +345,7 @@ todoInput = F.widget @TodoInput "input"
                         F.doModifyIORef' ref (\s -> s
                             & its.F.model.item' @TodoInfo .field @"editing" .~ False
                             & its.F.model.item' @TodoInfo .field @"value" .~ v')
-                        F.rerender this (F.doEffect' $ F.SetProperty ("value", JE.toJS' J.empty) (JE.toJS j))
+                        F.rerender this (F.setProperty ("value", JE.toJS' J.empty) (JE.toJS j))
             "Escape" -> do
                 F.doModifyIORef' ref (\s -> s
                     & its.F.model.item' @TodoInfo .field @"editing" .~ False
@@ -353,14 +353,14 @@ todoInput = F.widget @TodoInput "input"
                     -- but it's nice to reset the the dom
                     -- & its.F.plan %~ (F.scheduleAfterOnUpdated $ F.focusRef @TodoInput this)
                     )
-                F.rerender this (F.doEffect' $ F.SetProperty ("value", JE.toJS' J.empty) (JE.toJS j))
+                F.rerender this (F.setProperty ("value", JE.toJS' J.empty) (JE.toJS j))
             _ -> pure ()
     -- hdlStartEdit ::
     --     ( F.MonadReactor x m
     --     , HasItem' TodoInfo s
     --     , HasItemTag' TodoInput F.EventTarget s)
     --     => F.SceneHandler x m v s TodoStartEdit (Which '[])
-    -- hdlStartEdit = F.Handler $ \this@(F.Obj ref its) _ -> do
+    -- hdlStartEdit this@(F.Obj ref its) _ -> lift $ do
     --     void $ runMaybeT $ do
     --         obj <- lift $ F.doReadIORef ref
     --         let b = obj ^. its.F.model.item' @TodoInfo .field @"completed"
@@ -372,7 +372,6 @@ todoInput = F.widget @TodoInput "input"
     --             & its.F.plan %~ (F.scheduleAfterOnUpdated $ F.focus @TodoInput this)
     --             )
     --         lift $ F.rerender this
-    --     pure zilch
     --     --  FIXME: Reset value before start editing
 
 
