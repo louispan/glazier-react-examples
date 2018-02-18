@@ -355,24 +355,28 @@ todoInput = F.widget @TodoInput "input"
                     )
                 F.rerender this (F.setProperty ("value", JE.toJS' J.empty) (JE.toJS j))
             _ -> pure ()
-    -- hdlStartEdit ::
-    --     ( F.MonadReactor x m
-    --     , HasItem' TodoInfo s
-    --     , HasItemTag' TodoInput F.EventTarget s)
-    --     => F.SceneHandler x m v s TodoStartEdit (Which '[])
-    -- hdlStartEdit this@(F.Obj ref its) _ -> lift $ do
-    --     void $ runMaybeT $ do
-    --         obj <- lift $ F.doReadIORef ref
-    --         let b = obj ^. its.F.model.item' @TodoInfo .field @"completed"
-    --         guard (not b)
-    --         -- Focus after rendering changed because we are using uncontrollec components
-    --         -- with a new key. This will result in a different input element after each render
-    --         lift $ F.doModifyIORef' ref (\s -> s
-    --             & its.F.model.item' @TodoInfo .field @"editing" .~ True
-    --             & its.F.plan %~ (F.scheduleAfterOnUpdated $ F.focus @TodoInput this)
-    --             )
-    --         lift $ F.rerender this
-    --     --  FIXME: Reset value before start editing
+    hdlStartEdit ::
+        ( F.MonadReactor x m
+        , AsFacet F.Focus x
+        , AsFacet F.SetProperty x
+        , HasItem' TodoInfo s
+        , HasItemTag' TodoInput F.EventTarget s)
+        => F.SceneHandler m v s TodoStartEdit (Which '[])
+    hdlStartEdit this@(F.Obj ref its) _ = F.terminate' $ lift $ do
+        void $ runMaybeT $ do
+            obj <- lift $ F.doReadIORef ref
+            let b = obj ^. its.F.model.item' @TodoInfo .field @"completed"
+            guard (not b)
+            -- Focus after rendering changed because we are using uncontrollec components
+            -- with a new key. This will result in a different input element after each render
+            lift $ F.doModifyIORef' ref (\s -> s
+                & its.F.model.item' @TodoInfo .field @"editing" .~ True
+                )
+            lift . F.rerender this $ do
+                obj <- F.doReadIORef ref
+                let j = obj ^. its.F.model.itemTag' @TodoInput @F.EventTarget
+                F.setProperty ("value", JE.toJS' J.empty) (JE.toJS j)
+                F.focusRef @TodoInput this
 
 
 -- data GetProperty x m = GetProperty J.JSString J.JSVal (JE.JSVar -> m ())
