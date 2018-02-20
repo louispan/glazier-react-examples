@@ -124,8 +124,7 @@ todoLabel = F.widget @TodoLabel "label"
         ( HasItem' TodoInfo s
         , F.MonadReactor m
         ) => F.FrameDisplay m s ()
-    dis s =
-        (F.txt (s^.F.model.item' @TodoInfo .field @"value"))
+    dis s = F.txt (s^.F.model.item' @TodoInfo .field @"value")
 
     onDoubleClick ::
         ( HasItemTag' TodoLabel [F.Listener] s
@@ -153,8 +152,8 @@ todoView ::
         (Which '[])
 todoView =
     let p = todoToggleComplete
-                    `F.andPrototype` todoDestroy
-                    `F.andPrototype` todoLabel
+            `F.andPrototype` todoDestroy
+            `F.andPrototype` todoLabel
         disp = F.display' p
     in p { F.display' = \s -> F.branch "div" []
                 [ ("key", "view")
@@ -275,10 +274,10 @@ todo ::
     , F.MonadJS m
     , F.MonadHTMLElement m
     , HasItemTag' TodoDestroy [F.Listener] s
-    , HasItemTag' TodoInput F.EventTarget s
-    , HasItemTag' TodoInput [F.Listener] s
     , HasItemTag' TodoLabel [F.Listener] s
     , HasItemTag' TodoToggleComplete [F.Listener] s
+    , HasItemTag' TodoInput F.EventTarget s
+    , HasItemTag' TodoInput [F.Listener] s
     , HasItem' TodoInfo s
     , HasItem' TodoInfo i
     ) =>
