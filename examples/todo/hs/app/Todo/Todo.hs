@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -148,6 +149,7 @@ todoDisplay (cp, ss) = do
            ]
 
 data TodoToggleComplete
+
 todoToggleComplete ::
     ( F.MonadReactor m
     , HasItemTag' TodoToggleComplete [F.Listener] s
@@ -176,6 +178,7 @@ todoToggleComplete = F.widget @TodoToggleComplete "input"
             "onChange"
             (const $ pure ())
             hdlChange
+
     hdlChange ::
         (F.MonadReactor m, HasItem' TodoInfo s)
         => F.SceneHandler m v s () (Which '[])
@@ -235,6 +238,7 @@ todoLabel = F.widget @TodoLabel "label"
         ) => F.FrameDisplay m s ()
     dis s =
         (F.txt (s^.F.model.item' @TodoInfo .field @"value"))
+
     onDoubleClick ::
         ( HasItemTag' TodoLabel [F.Listener] s
         , F.MonadReactor m
@@ -243,7 +247,7 @@ todoLabel = F.widget @TodoLabel "label"
             "onDoubleClick"
             (const . pure $ pickOnly TodoStartEdit)
 
-todoDiv ::
+todoView ::
     ( F.MonadReactor m
     , HasItemTag' TodoToggleComplete [F.Listener] s
     , HasItemTag' TodoDestroy [F.Listener] s
@@ -259,14 +263,15 @@ todoDiv ::
         (Which '[TodoDestroy, TodoStartEdit])
         (Which '[])
         (Which '[])
-todoDiv = let p = todoToggleComplete
-                `F.andPrototype` todoDestroy
-                `F.andPrototype` todoLabel
-    in p & field @"display'" %~ fmap (\a ->
-        F.branch "div" []
-            [ ("key", "view")
-            , ("className", "view")]
-            a)
+todoView =
+    let p = todoToggleComplete
+                    `F.andPrototype` todoDestroy
+                    `F.andPrototype` todoLabel
+        disp = F.display' p
+    in p { F.display' = \s -> F.branch "div" []
+                [ ("key", "view")
+                , ("className", "view")]
+                (disp s) }
 
 data TodoInput
 data TodoCancelEdit = TodoCancelEdit deriving (G.Generic, NFData)
@@ -309,12 +314,14 @@ todoInput = F.widget @TodoInput "input"
             "onBlur"
             (const $ pure TodoCancelEdit)
             hdlBlur
+
     hdlBlur ::
         (F.MonadReactor m, HasItem' TodoInfo s)
         => F.SceneHandler m v s TodoCancelEdit (Which '[])
     hdlBlur this@(F.Obj ref its) _ = F.terminate' . lift $ do
         F.doModifyIORef' ref (its.F.model.item' @TodoInfo .field @"completed" %~ not)
         F.rerender' this
+
     onKeyDown ::
         ( F.MonadReactor m
         , F.MonadJS m
@@ -325,6 +332,7 @@ todoInput = F.widget @TodoInput "input"
             "onKeyDown"
             (runMaybeT . F.fireKeyDownKey)
             (F.maybeHandle hdlKeyDown)
+
     hdlKeyDown ::
         ( F.MonadReactor m
         , F.MonadJS m
@@ -350,6 +358,7 @@ todoInput = F.widget @TodoInput "input"
                 -- but it's nice to reset the the dom
                 F.rerender this (F.doSetProperty ("value", JE.toJS' J.empty) (JE.toJS j))
             _ -> pure ()
+
     hdlStartEdit ::
         ( F.MonadReactor m
         , F.MonadJS m
@@ -372,6 +381,46 @@ todoInput = F.widget @TodoInput "input"
                 let j = obj' ^. its.F.model.itemTag' @TodoInput @F.EventTarget
                 F.doSetProperty ("value", JE.toJS' J.empty) (JE.toJS j)
                 F.focusRef @TodoInput this
+
+todo ::
+        (F.MonadReactor m
+        , F.MonadJS m
+        , F.MonadHTMLElement m
+        , HasItemTag' TodoDestroy [F.Listener] s
+        , HasItemTag' TodoInput F.EventTarget s
+        , HasItemTag' TodoInput [F.Listener] s
+        , HasItemTag' TodoLabel [F.Listener] s
+        , HasItemTag' TodoToggleComplete [F.Listener] s
+        , HasItem' TodoInfo s) =>
+        F.Prototype m v i s
+        (Many '[])
+        (Many
+            '[ Tagged TodoToggleComplete [F.Listener]
+             , Tagged TodoDestroy [F.Listener]
+             , Tagged TodoLabel [F.Listener]
+             , Tagged TodoInput [F.Listener]
+             , Tagged TodoInput F.EventTarget
+             , Tagged TodoLabel [F.Listener]])
+        (Which '[TodoDestroy])
+        (Which '[])
+        (Which '[])
+todo = let  p = todoView
+                `F.andPrototype` todoInput
+                `F.andPrototype` todoLabel
+            act = F.activator' p
+            hdl = F.handler' p
+            disp = F.display' p
+        in p { F.activator' = act `F.drives'` hdl
+            , F.handler' = F.nulHandler
+            , F.display' = \s ->
+                let s' = s ^. F.model.item' @TodoInfo
+                in F.branch "div" []
+                    [ ("className", JE.classNames
+                        [ ("completed", completed s')
+                        , ("editing", editing s')])
+                    ]
+                    (disp s)
+            }
 
 
 -- data GetProperty x m = GetProperty J.JSString J.JSVal (JE.JSVar -> m ())
