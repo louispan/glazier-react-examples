@@ -46,7 +46,7 @@ todoToggleComplete ::
         (Which '[])
         (Which '[])
 todoToggleComplete = F.nulPrototype
-        { F.display' = F.widget i "input"
+        { F.display' = F.gadget i "input"
             (\s ->
                 [ ("key", "toggle")
                 , ("className", "toggle")
@@ -55,12 +55,12 @@ todoToggleComplete = F.nulPrototype
             mempty
         , F.activator' = onChange }
   where
-    i = F.WidgetId "toggle"
+    i = F.GadgetId "toggle"
     onChange ::
         ( HasItem' TodoInfo s
         , F.MonadReactor m
         ) => F.SceneActivator m v s (Which '[])
-    onChange = F.controlledTrigger i "onChange"
+    onChange = F.handledTrigger i "onChange"
             (const $ pure ())
             hdlChange
 
@@ -83,14 +83,14 @@ todoDestroy ::
         (Which '[])
         (Which '[])
 todoDestroy = F.nulPrototype
-    { F.display' = F.widget i "button"
+    { F.display' = F.gadget i "button"
         (const
             [ ("key", "destroy")
             , ("className", "destroy")])
         mempty
     , F.activator' = onClick }
   where
-    i = F.WidgetId "destroy"
+    i = F.GadgetId "destroy"
     onClick :: (F.MonadReactor m) => F.SceneActivator m v s (Which '[TodoDestroy])
     onClick = F.trigger i "onClick"
             (const . pure $ pickOnly TodoDestroy)
@@ -112,12 +112,12 @@ todoLabel = F.nulPrototype
         , F.activator' = onDoubleClick
         }
   where
-    i = F.WidgetId "label"
+    i = F.GadgetId "label"
     disp ::
         ( HasItem' TodoInfo s
         , F.MonadReactor m
         ) => F.FrameDisplay m s ()
-    disp = F.widget i "label" (const [ ("key", "label")]) $
+    disp = F.gadget i "label" (const [ ("key", "label")]) $
         \s -> F.txt (s ^. F.model.item' @TodoInfo .field @"value")
     onDoubleClick :: (F.MonadReactor m) => F.SceneActivator m v s (Which '[TodoStartEdit])
     onDoubleClick = F.trigger i "onDoubleClick"
@@ -158,7 +158,7 @@ todoInput ::
         (Which '[TodoStartEdit])
         (Which '[])
 todoInput = F.nulPrototype
-    { F.display' = F.widget i "input"
+    { F.display' = F.gadget i "input"
         (\s ->
             -- For uncontrolled components, we need to generate a new key per render
             -- in order for react to use the new defaultValue
@@ -173,12 +173,12 @@ todoInput = F.nulPrototype
     , F.activator' = F.withRef i `F.andActivator` onBlur `F.andActivator` onKeyDown
     , F.handler' = (. obvious) <$> hdlStartEdit }
   where
-    i = F.WidgetId "input"
+    i = F.GadgetId "input"
     onBlur ::
         ( HasItem' TodoInfo s
         , F.MonadReactor m
         ) => F.SceneActivator m v s (Which '[])
-    onBlur = F.controlledTrigger i "onBlur"
+    onBlur = F.handledTrigger i "onBlur"
             (const $ pure TodoCancelEdit)
             hdlBlur
 
@@ -194,7 +194,7 @@ todoInput = F.nulPrototype
         , F.MonadJS m
         , HasItem' TodoInfo s
         ) => F.SceneActivator m v s (Which '[TodoDestroy])
-    onKeyDown = F.controlledTrigger i "onKeyDown"
+    onKeyDown = F.handledTrigger i "onKeyDown"
             (runMaybeT . F.fireKeyDownKey)
             (F.maybeHandle hdlKeyDown)
 
@@ -269,7 +269,7 @@ todo =
         hdl = F.handler' p
         disp = F.display' p
     in p { F.builder' = F.buildItem @TodoInfo `F.andBuilder` bld
-        , F.activator' = act `F.drives'` hdl
+        , F.activator' = act `F.activates'` hdl
         , F.handler' = F.nulHandler
         , F.display' = \s ->
             let s' = s ^. F.model.item' @TodoInfo
