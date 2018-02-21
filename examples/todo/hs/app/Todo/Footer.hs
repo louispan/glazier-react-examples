@@ -43,10 +43,10 @@ todoFooter ::
         (Which '[])
 todoFooter =
     let p = F.nulPrototype
-            { F.builder' = F.build @TodoFooter
-            , F.display' = todoDisplay
-            , F.activator' = onChange
-            , F.handler' = ((. obvious) <$> hdlSetFilter) `F.orHandler` ((. obvious) <$> hdlSetCounts)
+            { F.builder = F.build @TodoFooter
+            , F.display = todoDisplay
+            , F.activator = onChange
+            , F.handler = ((. obvious) <$> hdlSetFilter) `F.orHandler` ((. obvious) <$> hdlSetCounts)
             }
     in F.toItemPrototype p
 

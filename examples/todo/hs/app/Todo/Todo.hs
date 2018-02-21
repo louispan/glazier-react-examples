@@ -43,12 +43,12 @@ todoToggleComplete ::
         (Which '[])
         (Which '[])
 todoToggleComplete = F.nulPrototype
-        { F.display' = \s -> F.leaf "input" (F.getListeners i s)
+        { F.display = \s -> F.leaf "input" (F.getListeners i s)
                 [ ("key", "toggle")
                 , ("className", "toggle")
                 , ("type", "checkbox")
                 , ("checked", JE.toJS' . completed $ s ^. F.model)]
-        , F.activator' = onChange }
+        , F.activator = onChange }
   where
     i = F.GadgetId "toggle"
     onChange ::
@@ -76,10 +76,10 @@ todoDestroy ::
         (Which '[])
         (Which '[])
 todoDestroy = F.nulPrototype
-    { F.display' = \s -> F.leaf "button" (F.getListeners i s)
+    { F.display = \s -> F.leaf "button" (F.getListeners i s)
             [ ("key", "destroy")
             , ("className", "destroy")]
-    , F.activator' = onClick }
+    , F.activator = onClick }
   where
     i = F.GadgetId "destroy"
     onClick :: (F.MonadReactor m) => F.SceneActivator m v s (Which '[TodoDestroy])
@@ -98,8 +98,8 @@ todoLabel ::
         (Which '[])
         (Which '[])
 todoLabel = F.nulPrototype
-        { F.display' = disp
-        , F.activator' = onDoubleClick
+        { F.display = disp
+        , F.activator = onDoubleClick
         }
   where
     i = F.GadgetId "label"
@@ -124,8 +124,8 @@ todoView =
     let p = todoToggleComplete
             `F.andPrototype` todoDestroy
             `F.andPrototype` todoLabel
-        disp = F.display' p
-    in p { F.display' = \s -> F.branch' "div"
+        disp = F.display p
+    in p { F.display = \s -> F.branch' "div"
                 [ ("key", "view")
                 , ("className", "view")]
                 (disp s) }
@@ -144,7 +144,7 @@ todoInput ::
         (Which '[TodoStartEdit])
         (Which '[])
 todoInput = F.nulPrototype
-    { F.display' = \s -> F.leaf "input" (F.getListeners i s)
+    { F.display = \s -> F.leaf "input" (F.getListeners i s)
             -- For uncontrolled components, we need to generate a new key per render
             -- in order for react to use the new defaultValue
             [ ("key", JE.toJS' $ J.unwords
@@ -154,8 +154,8 @@ todoInput = F.nulPrototype
             , ("className", "edit")
             , ("defaultValue", JE.toJS' . value $ s ^. F.model)
             , ("defaultChecked", JE.toJS' . completed $ s ^. F.model)]
-    , F.activator' = F.withRef i `F.andActivator` onBlur `F.andActivator` onKeyDown
-    , F.handler' = (. obvious) <$> hdlStartEdit }
+    , F.activator = F.withRef i `F.andActivator` onBlur `F.andActivator` onKeyDown
+    , F.handler = (. obvious) <$> hdlStartEdit }
   where
     i = F.GadgetId "input"
     onBlur ::
@@ -242,14 +242,14 @@ todo ::
         (Which '[])
 todo =
     let p = todoView `F.andPrototype` todoInput
-        act = F.activator' p
-        hdl = F.handler' p
-        disp = F.display' p
+        act = F.activator p
+        hdl = F.handler p
+        disp = F.display p
         p' = p {
-            F.builder' = F.build @TodoInfo
-            , F.activator' = act `F.activates'` hdl
-            , F.handler' = F.nulHandler -- don't need to expose StartEdit handler
-            , F.display' = \s ->
+            F.builder = F.build @TodoInfo
+            , F.activator = act `F.activates'` hdl
+            , F.handler = F.nulHandler -- don't need to expose StartEdit handler
+            , F.display = \s ->
                 let s' = s ^. F.model
                 in F.branch "div" []
                     [ ("className", JE.classNames
