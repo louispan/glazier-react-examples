@@ -19,10 +19,8 @@ executable glazier-react-todo
                        -- Todo.App
                        -- Todo.App.Run
                        Todo.Todo
-                       -- Todo.Todo.Run
-                       -- Todo.Filter
-                       -- Todo.Footer
-                       -- Todo.Footer.Run
+                       Todo.Filter
+                       Todo.Footer
   main-is:             Main.hs
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
   cpp-options:         -DGHCJS_BROWSER
