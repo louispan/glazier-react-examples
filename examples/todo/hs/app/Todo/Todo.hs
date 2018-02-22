@@ -242,20 +242,16 @@ todo ::
         (Which '[])
 todo =
     let p = todoView `F.andPrototype` todoInput
-        act = F.activator p
         hdl = F.handler p
-        disp = F.display p
-        p' = p {
-            F.builder = F.build @TodoInfo
-            , F.activator = act `F.activates'` hdl
-            , F.handler = F.nulHandler -- don't need to expose StartEdit handler
-            , F.display = \s ->
+        p' = F.mapBuilder (F.constBuilder $ F.build @TodoInfo) $
+            F.mapActivator (`F.activates'` hdl) $
+            F.mapDisplay (\disp s ->
                 let s' = s ^. F.model
-                in F.branch "div" []
-                    [ ("className", JE.classNames
-                        [ ("completed", completed s')
-                        , ("editing", editing s')])
-                    ]
-                    (disp s)
-            }
+                    in F.branch "div" []
+                        [ ("className", JE.classNames
+                            [ ("completed", completed s')
+                            , ("editing", editing s')])
+                        ]
+                        (disp s)) $
+            p { F.handler = F.nulHandler } -- don't need to expose StartEdit handler
     in F.toItemPrototype p'
