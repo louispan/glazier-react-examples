@@ -42,7 +42,7 @@ todoToggleComplete ::
         (Which '[])
         (Which '[])
 todoToggleComplete = R.nulPrototype
-        { R.display = \s -> R.lf'' i s "input"
+        { R.display = \s -> R.lf' i s "input"
                 [ ("key", "toggle")
                 , ("className", "toggle")
                 , ("type", "checkbox")
@@ -75,7 +75,7 @@ todoDestroy ::
         (Which '[])
         (Which '[])
 todoDestroy = R.nulPrototype
-    { R.display = \s -> R.lf'' i s "button"
+    { R.display = \s -> R.lf' i s "button"
             [ ("key", "destroy")
             , ("className", "destroy")]
     , R.activator = onClick }
@@ -105,7 +105,7 @@ todoLabel = R.nulPrototype
     disp ::
         ( R.MonadReactor m
         ) => R.FrameDisplay m TodoInfo ()
-    disp s = R.bh'' i s "label" [("key", "label")] $
+    disp s = R.bh' i s "label" [("key", "label")] $
                 R.txt (s ^. R.model.field @"value")
     onDoubleClick :: (R.MonadReactor m) => R.SceneActivator m v s (Which '[TodoStartEdit])
     onDoubleClick = R.trigger i "onDoubleClick"
@@ -141,7 +141,7 @@ todoInput ::
         (Which '[TodoStartEdit])
         (Which '[])
 todoInput = R.nulPrototype
-    { R.display = \s -> R.lf'' i s "input"
+    { R.display = \s -> R.lf' i s "input"
             -- For uncontrolled components, we need to generate a new key per render
             -- in order for react to use the new defaultValue
             [ ("key", JE.toJS' $ J.unwords

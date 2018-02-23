@@ -90,7 +90,7 @@ todoDisplay s = do
                     ] $
                     R.txt "Completed"
         if (s ^. R.model.field @"completedCount" > 0)
-           then R.bh'' i s "button"
+           then R.bh' i s "button"
                     [("key", "clear-completed"), ("className", "clear-completed")] $
                             -- , ("onClick", s ^. fireClearCompleted . to JE.toJS')] $
                     R.txt "Clear completed"
