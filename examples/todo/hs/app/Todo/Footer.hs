@@ -20,7 +20,7 @@ import Data.Generics.Product
 import qualified Data.JSString as J
 import qualified GHC.Generics as G
 import qualified Glazier.React as R
-import qualified Glazier.React.Framework as F
+import qualified Glazier.React.Framework as R
 import qualified JavaScript.Extras as JE
 import qualified Todo.Filter as TD.Filter
 
@@ -31,101 +31,101 @@ data TodoFooter = TodoFooter
     } deriving G.Generic
 
 todoFooter ::
-    ( F.MonadReactor m
+    ( R.MonadReactor m
     , HasItem' TodoFooter s
     , HasItem' TodoFooter i
     )
-    => F.Prototype m v i s
+    => R.Prototype m v i s
         (Many '[TodoFooter])
         (Many '[TodoFooter])
         (Which '[ClearCompleted])
         (Which '[SetFilter, SetCounts])
         (Which '[])
 todoFooter =
-    let p = F.nulPrototype
-            { F.builder = F.build @TodoFooter
-            , F.display = todoDisplay
-            , F.activator = onChange
-            , F.handler = ((. obvious) <$> hdlSetFilter) `F.orHandler` ((. obvious) <$> hdlSetCounts)
+    let p = R.nulPrototype
+            { R.builder = R.build @TodoFooter
+            , R.display = todoDisplay
+            , R.activator = onChange
+            , R.handler = ((. obvious) <$> hdlSetFilter) `R.orHandler` ((. obvious) <$> hdlSetCounts)
             }
-    in F.toItemPrototype p
+    in R.toItemPrototype p
 
 todoDisplay :: (Monad m)
-    => F.FrameDisplay m TodoFooter ()
+    => R.FrameDisplay m TodoFooter ()
 todoDisplay s = do
-    R.branch' "footer" [("className", "footer")] $ do
-        R.branch' "span" [ ("className", "todo-count")
+    R.bh "footer" [("className", "footer")] $ do
+        R.bh "span" [ ("className", "todo-count")
                     , ("key", "todo-count")] $ do
-            R.branch' "strong" [("key", "items")]
-                (s ^. F.model.field @"activeCount" . to show . to J.pack . to R.txt)
+            R.bh "strong" [("key", "items")]
+                (s ^. R.model.field @"activeCount" . to show . to J.pack . to R.txt)
             R.txt " items left"
-        R.branch' "ul" [("className", "filters")
+        R.bh "ul" [("className", "filters")
                   , ("key", "filters")] $ do
-            R.branch' "li" [("key", "filter-all")] $
-                R.branch' "a" [ ("href", "#/")
+            R.bh "li" [("key", "filter-all")] $
+                R.bh "a" [ ("href", "#/")
                          , ("key", "all")
                          , ("className", JE.classNames
                             [("selected"
-                            , s ^. F.model.field @"currentFilter" == TD.Filter.All)])
+                            , s ^. R.model.field @"currentFilter" == TD.Filter.All)])
                          ] $
                 R.txt "All"
             R.txt " "
-            R.branch' "li" [("key", "filter-active")] $
-                R.branch' "a"
+            R.bh "li" [("key", "filter-active")] $
+                R.bh "a"
                 [ ("href", "#/active")
                 , ("key", "active")
                 , ("className", JE.classNames
                     [("selected"
-                    , s ^. F.model.field @"currentFilter" == TD.Filter.Active)])
+                    , s ^. R.model.field @"currentFilter" == TD.Filter.Active)])
                 ] $
                 R.txt "Active"
             R.txt " "
-            R.branch' "li" [("key", "filter-completed")] $
-                R.branch' "a"
+            R.bh "li" [("key", "filter-completed")] $
+                R.bh "a"
                     [ ("href", "#/completed")
                     , ("key", "completed")
                     , ("className", JE.classNames
                         [("selected"
-                        , s ^. F.model.field @"currentFilter" == TD.Filter.Completed)])
+                        , s ^. R.model.field @"currentFilter" == TD.Filter.Completed)])
                     ] $
                     R.txt "Completed"
-        if (s ^. F.model.field @"completedCount" > 0)
-           then F.branch "button" (F.getListeners i s)
+        if (s ^. R.model.field @"completedCount" > 0)
+           then R.bh'' i s "button"
                     [("key", "clear-completed"), ("className", "clear-completed")] $
                             -- , ("onClick", s ^. fireClearCompleted . to JE.toJS')] $
                     R.txt "Clear completed"
            else mempty
   where
-    i = F.GadgetId "footer"
+    i = R.GadgetId "footer"
 
 data ClearCompleted = ClearCompleted
 
 onChange ::
-    ( F.MonadReactor m
-    ) => F.SceneActivator m v s (Which '[ClearCompleted])
-onChange = F.trigger i "onClick" (const $ pure ()) (const $ pickOnly ClearCompleted)
+    ( R.MonadReactor m
+    ) => R.SceneActivator m v s (Which '[ClearCompleted])
+onChange = R.trigger i "onClick" (const $ pure ()) (const $ pickOnly ClearCompleted)
   where
-    i = F.GadgetId "footer"
+    i = R.GadgetId "footer"
 
 data SetFilter = SetFilter TD.Filter.Filter
 
 hdlSetFilter ::
-    (F.MonadReactor m)
-    => F.SceneHandler m v TodoFooter SetFilter (Which '[])
-hdlSetFilter this@(F.Obj ref its) (SetFilter fltr) = F.terminate' . lift $ do
-    F.doModifyIORef' ref (its.F.model.field @"currentFilter" .~ fltr)
-    F.rerender' this
+    (R.MonadReactor m)
+    => R.SceneHandler m v TodoFooter SetFilter (Which '[])
+hdlSetFilter this@(R.Obj ref its) (SetFilter fltr) = R.terminate' . lift $ do
+    R.doModifyIORef' ref (its.R.model.field @"currentFilter" .~ fltr)
+    R.rerender' this
 
 data SetCounts = SetCounts Int Int
 
 hdlSetCounts ::
-    (F.MonadReactor m)
-    => F.SceneHandler m v TodoFooter SetCounts (Which '[])
-hdlSetCounts this@(F.Obj ref its) (SetCounts activeCnt completedCnt) = F.terminate' . lift $ do
-    F.doModifyIORef' ref (\s -> s
-        & its.F.model.field @"activeCount" .~ activeCnt
-        & its.F.model.field @"completedCount" .~ completedCnt)
-    F.rerender' this
+    (R.MonadReactor m)
+    => R.SceneHandler m v TodoFooter SetCounts (Which '[])
+hdlSetCounts this@(R.Obj ref its) (SetCounts activeCnt completedCnt) = R.terminate' . lift $ do
+    R.doModifyIORef' ref (\s -> s
+        & its.R.model.field @"activeCount" .~ activeCnt
+        & its.R.model.field @"completedCount" .~ completedCnt)
+    R.rerender' this
 
 -- -- | This needs to be explictly registered by the Main app
 -- onHashChange ::  J.JSVal -> MaybeT IO [Action]
