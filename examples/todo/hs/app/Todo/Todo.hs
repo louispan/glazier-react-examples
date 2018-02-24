@@ -46,7 +46,7 @@ todoToggleComplete = R.nulPrototype
                 [ ("key", "toggle")
                 , ("className", "toggle")
                 , ("type", "checkbox")
-                , ("checked", JE.toJS' . completed $ s ^. R.model)]
+                , ("checked", JE.toJSR . completed $ s ^. R.model)]
         , R.activator = onChange }
   where
     i = R.GadgetId "toggle"
@@ -144,13 +144,13 @@ todoInput = R.nulPrototype
     { R.display = \s -> R.lf' i s "input"
             -- For uncontrolled components, we need to generate a new key per render
             -- in order for react to use the new defaultValue
-            [ ("key", JE.toJS' $ J.unwords
+            [ ("key", JE.toJSR $ J.unwords
                 [ R.runReactKey . R.reactKey $ s ^. R.plan
                 , J.pack . show . R.frameNum $ s ^. R.plan
                 ])
             , ("className", "edit")
-            , ("defaultValue", JE.toJS' . value $ s ^. R.model)
-            , ("defaultChecked", JE.toJS' . completed $ s ^. R.model)]
+            , ("defaultValue", JE.toJSR . value $ s ^. R.model)
+            , ("defaultChecked", JE.toJSR . completed $ s ^. R.model)]
     , R.activator = R.withRef i `R.andActivator` onBlur `R.andActivator` onKeyDown
     , R.handler = (. obvious) <$> hdlStartEdit }
   where
@@ -183,7 +183,7 @@ todoInput = R.nulPrototype
     hdlKeyDown this@(R.Obj ref its) (R.KeyDownKey j key) = ContT $ \fire ->
         case key of
             "Enter" -> do
-                v <- JE.fromJS' @J.JSString <$> (R.doGetProperty "value" (JE.toJS j))
+                v <- JE.fromJSR @J.JSString <$> (R.doGetProperty "value" (JE.toJS j))
                 let v' = J.strip $ fromMaybe J.empty v
                 if J.null v'
                     then
@@ -192,12 +192,12 @@ todoInput = R.nulPrototype
                         R.doModifyIORef' ref (\s -> s
                             & its.R.model.field @"editing" .~ False
                             & its.R.model.field @"value" .~ v')
-                        R.rerender this (R.doSetProperty ("value", JE.toJS' J.empty) (JE.toJS j))
+                        R.rerender this (R.doSetProperty ("value", JE.toJSR J.empty) (JE.toJS j))
             "Escape" -> do
                 R.doModifyIORef' ref (its.R.model.field @"editing" .~ False)
                 -- don't strictly need to reset the value, editing = false will hide this input
                 -- but it's nice to reset the the dom
-                R.rerender this (R.doSetProperty ("value", JE.toJS' J.empty) (JE.toJS j))
+                R.rerender this (R.doSetProperty ("value", JE.toJSR J.empty) (JE.toJS j))
             _ -> pure ()
 
     hdlStartEdit ::
@@ -221,23 +221,23 @@ todoInput = R.nulPrototype
                 case j of
                     Nothing -> pure ()
                     Just j' -> do
-                        R.doSetProperty ("value", JE.toJS' J.empty) (JE.toJS j')
+                        R.doSetProperty ("value", JE.toJSR J.empty) (JE.toJS j')
                         R.focusRef i this
 
 todo ::
     ( R.MonadReactor m
     , R.MonadJS m
     , R.MonadHTMLElement m
-    , HasItem' TodoInfo s
-    , HasItem' TodoInfo i
     ) =>
-    R.Prototype m v i s
+    (i -> TodoInfo)
+    -> Lens' s TodoInfo
+    -> R.Prototype m v i s
         (Many '[TodoInfo])
         (Many '[TodoInfo])
         (Which '[TodoDestroy])
         (Which '[])
         (Which '[])
-todo =
+todo fi fs =
     let p = todoView `R.andPrototype` todoInput
         hdl = R.handler p
         p' = R.mapBuilder (R.constBuilder $ R.build @TodoInfo) $
@@ -251,4 +251,4 @@ todo =
                         ]
                         (disp s)) $
             p { R.handler = R.nulHandler } -- don't need to expose StartEdit handler
-    in R.toItemPrototype p'
+    in R.toItemPrototype fi fs p'

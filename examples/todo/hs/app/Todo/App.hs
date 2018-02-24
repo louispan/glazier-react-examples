@@ -38,17 +38,17 @@ import qualified GHCJS.Types as J
 import qualified Glazier as G
 import qualified Glazier.React.Command as R
 import qualified Glazier.React.Component as R
+import qualified Glazier.React.Gadgets.Property as G.Property
 import qualified Glazier.React.Maker as R
 import qualified Glazier.React.Markup as R
 import qualified Glazier.React.Model as R
-import qualified Glazier.React.Gadgets.Property as G.Property
 import qualified Glazier.React.Widget as R
 import qualified Glazier.React.Widgets.Input as W.Input
 import qualified Glazier.React.Widgets.List as W.List
 import qualified JavaScript.Extras as JE
-import qualified Todo.Todo as TD.Todo
-import qualified Todo.Footer as TD.Footer
 import qualified Todo.Filter as TD.Filter
+import qualified Todo.Footer as TD.Footer
+import qualified Todo.Todo as TD.Todo
 
 type TodosKey = Int
 
@@ -144,10 +144,10 @@ isActiveTodo = view (TD.Todo.completed . to not)
 window :: G.WindowT (R.Scene Model Plan) R.ReactMl ()
 window = do
     s <- ask
-    lift $ R.lf (s ^. component . to JE.toJS')
-        [ ("key",  s ^. key . to JE.toJS')
-        , ("render", s ^. onRender . to JE.toJS')
-        , ("ref", s ^. onComponentRef . to JE.toJS')
+    lift $ R.lf (s ^. component . to JE.toJSR)
+        [ ("key",  s ^. key . to JE.toJSR)
+        , ("render", s ^. onRender . to JE.toJSR)
+        , ("ref", s ^. onComponentRef . to JE.toJSR)
         ]
 
 -- | This is used by the React render callback
@@ -174,8 +174,8 @@ mainWindow separator = do
             R.lf "input" [ ("key", "toggle-all")
                          , ("className", "toggle-all")
                          , ("type", "checkbox")
-                         , ("checked", s ^. todos . W.List.items . to (JE.toJS' . not . hasActiveTodos))
-                         , ("onChange", s ^. fireToggleCompleteAll . to JE.toJS')
+                         , ("checked", s ^. todos . W.List.items . to (JE.toJSR . not . hasActiveTodos))
+                         , ("onChange", s ^. fireToggleCompleteAll . to JE.toJSR)
                          ]
             -- Render the list of todos
             view G._WindowT (todoListWindow separator) s

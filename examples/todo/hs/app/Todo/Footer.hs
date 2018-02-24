@@ -32,23 +32,23 @@ data TodoFooter = TodoFooter
 
 todoFooter ::
     ( R.MonadReactor m
-    , HasItem' TodoFooter s
-    , HasItem' TodoFooter i
     )
-    => R.Prototype m v i s
+    => (i -> TodoFooter)
+    -> Lens' s TodoFooter
+    -> R.Prototype m v i s
         (Many '[TodoFooter])
         (Many '[TodoFooter])
         (Which '[ClearCompleted])
         (Which '[SetFilter, SetCounts])
         (Which '[])
-todoFooter =
+todoFooter fi fs =
     let p = R.nulPrototype
             { R.builder = R.build @TodoFooter
             , R.display = todoDisplay
             , R.activator = onChange
             , R.handler = ((. obvious) <$> hdlSetFilter) `R.orHandler` ((. obvious) <$> hdlSetCounts)
             }
-    in R.toItemPrototype p
+    in R.toItemPrototype fi fs p
 
 todoDisplay :: (Monad m)
     => R.FrameDisplay m TodoFooter ()
@@ -92,7 +92,7 @@ todoDisplay s = do
         if (s ^. R.model.field @"completedCount" > 0)
            then R.bh' i s "button"
                     [("key", "clear-completed"), ("className", "clear-completed")] $
-                            -- , ("onClick", s ^. fireClearCompleted . to JE.toJS')] $
+                            -- , ("onClick", s ^. fireClearCompleted . to JE.toJSR)] $
                     R.txt "Clear completed"
            else mempty
   where
@@ -135,7 +135,7 @@ hdlSetCounts this@(R.Obj ref its) (SetCounts activeCnt completedCnt) = R.termina
 -- -- needs to combine other widgets that also uses hashchange event
 -- whenHashChange :: J.JSVal -> MaybeT IO J.JSString
 -- whenHashChange evt = do
---     newURL <- MaybeT (JE.fromJS' <$> JE.getProperty "newURL" evt)
+--     newURL <- MaybeT (JE.fromJSR <$> JE.getProperty "newURL" evt)
 --     let (_, newHash) = J.breakOn "#" newURL
 --     pure newHash
 
