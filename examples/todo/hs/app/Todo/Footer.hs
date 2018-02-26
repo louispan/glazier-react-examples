@@ -55,6 +55,14 @@ todoFooter = R.nulPrototype
             , R.initializer = onChange
             -- , R.handler = ((. obvious) <$> hdlSetFilter) `R.orHandler` ((. obvious) <$> hdlSetCounts)
             }
+  where
+    i = R.GadgetId "footer"
+    onChange ::
+        ( R.MonadReactor m
+        ) => R.SceneInitializer m v s (Which '[ClearCompleted])
+    onChange = R.trigger i "onClick" (const $ pure ()) (const $ pickOnly ClearCompleted)
+
+data ClearCompleted = ClearCompleted
 
 todoDisplay :: (Monad m)
     => R.FrameDisplay m TodoFooter ()
@@ -101,15 +109,6 @@ todoDisplay s = do
                             -- , ("onClick", s ^. fireClearCompleted . to JE.toJSR)] $
                     R.txt "Clear completed"
            else mempty
-  where
-    i = R.GadgetId "footer"
-
-data ClearCompleted = ClearCompleted
-
-onChange ::
-    ( R.MonadReactor m
-    ) => R.SceneInitializer m v s (Which '[ClearCompleted])
-onChange = R.trigger i "onClick" (const $ pure ()) (const $ pickOnly ClearCompleted)
   where
     i = R.GadgetId "footer"
 
