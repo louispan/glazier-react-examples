@@ -30,25 +30,31 @@ data TodoFooter = TodoFooter
     , currentFilter :: TD.Filter.Filter
     } deriving G.Generic
 
+hdlSetFilter ::
+    (R.MonadReactor m)
+    => R.SceneHandler m v TodoFooter TD.Filter.Filter (Which '[])
+hdlSetFilter this@(R.Obj ref its) fltr = R.terminate' . lift $ do
+    R.doModifyIORef' ref (its.R.model.field @"currentFilter" .~ fltr)
+    R.rerender' this
+
+hdlSetCounts ::
+    (R.MonadReactor m)
+    => R.SceneHandler m v TodoFooter (Int, Int) (Which '[])
+hdlSetCounts this@(R.Obj ref its) (activeCnt, completedCnt) = R.terminate' . lift $ do
+    R.doModifyIORef' ref (\s -> s
+        & its.R.model.field @"activeCount" .~ activeCnt
+        & its.R.model.field @"completedCount" .~ completedCnt)
+    R.rerender' this
+
 todoFooter ::
     ( R.MonadReactor m
     )
-    => (i -> TodoFooter)
-    -> Lens' s TodoFooter
-    -> R.Prototype m v i s
-        (Many '[TodoFooter])
-        (Many '[TodoFooter])
-        (Which '[ClearCompleted])
-        (Which '[SetFilter, SetCounts])
-        (Which '[])
-todoFooter fi fs =
-    let p = R.nulPrototype
-            { R.builder = R.build @TodoFooter
-            , R.display = todoDisplay
-            , R.activator = onChange
-            , R.handler = ((. obvious) <$> hdlSetFilter) `R.orHandler` ((. obvious) <$> hdlSetCounts)
+    => R.Prototype m v TodoFooter (Which '[ClearCompleted])
+todoFooter = R.nulPrototype
+            { R.display = todoDisplay
+            , R.initializer = onChange
+            -- , R.handler = ((. obvious) <$> hdlSetFilter) `R.orHandler` ((. obvious) <$> hdlSetCounts)
             }
-    in R.toItemPrototype fi fs p
 
 todoDisplay :: (Monad m)
     => R.FrameDisplay m TodoFooter ()
@@ -102,30 +108,10 @@ data ClearCompleted = ClearCompleted
 
 onChange ::
     ( R.MonadReactor m
-    ) => R.SceneActivator m v s (Which '[ClearCompleted])
+    ) => R.SceneInitializer m v s (Which '[ClearCompleted])
 onChange = R.trigger i "onClick" (const $ pure ()) (const $ pickOnly ClearCompleted)
   where
     i = R.GadgetId "footer"
-
-data SetFilter = SetFilter TD.Filter.Filter
-
-hdlSetFilter ::
-    (R.MonadReactor m)
-    => R.SceneHandler m v TodoFooter SetFilter (Which '[])
-hdlSetFilter this@(R.Obj ref its) (SetFilter fltr) = R.terminate' . lift $ do
-    R.doModifyIORef' ref (its.R.model.field @"currentFilter" .~ fltr)
-    R.rerender' this
-
-data SetCounts = SetCounts Int Int
-
-hdlSetCounts ::
-    (R.MonadReactor m)
-    => R.SceneHandler m v TodoFooter SetCounts (Which '[])
-hdlSetCounts this@(R.Obj ref its) (SetCounts activeCnt completedCnt) = R.terminate' . lift $ do
-    R.doModifyIORef' ref (\s -> s
-        & its.R.model.field @"activeCount" .~ activeCnt
-        & its.R.model.field @"completedCount" .~ completedCnt)
-    R.rerender' this
 
 -- -- | This needs to be explictly registered by the Main app
 -- onHashChange ::  J.JSVal -> MaybeT IO [Action]
