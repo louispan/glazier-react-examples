@@ -41,7 +41,7 @@ todoToggleComplete = W.checkboxInput (R.GadgetId "toggle")
  where
     fdisp disp s = R.modifySurfaceProperties fprops (disp s)
     fprops = (:) ("className", "toggle")
-    fini ini = ini `R.handledBy` (R.ignoreHandler @(Which '[W.OnBlur, W.OnEsc, W.OnToggle]))
+    fini ini = ini `R.handledBy` (R.ignoreHandler @(Which '[W.OnFocus, W.OnBlur, W.OnEsc, W.OnToggle]))
 
 data TodoDestroy = TodoDestroy
 
@@ -106,8 +106,7 @@ todoInput = (W.textInput (R.GadgetId "input"))
         => R.SceneHandler m v TodoInfo W.OnFocus (Which '[])
     hdlFocus (R.Obj ref its) _ = R.terminate' . lift $ do
         R.doModifyIORef' ref (its.R.model.field @"editing" .~ True)
-        -- re-render using updated model
-        R.rerender' this
+        R.stale this
 
     hdlBlur :: (R.MonadReactor m, R.MonadJS m)
         => R.SceneHandler m v TodoInfo W.OnBlur (Which '[])
@@ -119,6 +118,7 @@ todoInput = (W.textInput (R.GadgetId "input"))
             & its.R.model.field @"editing" .~ False
             & its.R.model.field @"value" .~ v')
         R.doSetProperty ("value", JE.toJSR v') (JE.toJS j)
+        R.stale this
 
     hdlEnter :: (R.MonadReactor m, R.MonadJS m)
         => R.SceneHandler m v TodoInfo W.OnEnter (Which '[TodoDestroy])
@@ -134,6 +134,7 @@ todoInput = (W.textInput (R.GadgetId "input"))
                     & its.R.model.field @"editing" .~ False
                     & its.R.model.field @"value" .~ v')
                 R.doSetProperty ("value", JE.toJSR v') (JE.toJS j)
+                R.stale this
 
 hdlStartEdit ::
     ( R.MonadReactor m
@@ -150,7 +151,7 @@ hdlStartEdit i this@(R.Obj ref its) _ = R.terminate' $ lift $ do
         lift $ R.doModifyIORef' ref (\s -> s
             & its.R.model.field @"editing" .~ True
             )
-        lift . R.rerender this $ do
+        lift . R.addOnceOnUpdated this $ do
             obj' <- R.doReadIORef ref
             let j = obj' ^. its.R.plan.field @"refs".at i
             case j of
@@ -158,6 +159,7 @@ hdlStartEdit i this@(R.Obj ref its) _ = R.terminate' $ lift $ do
                 Just j' -> do
                     R.doSetProperty ("value", JE.toJSR J.empty) (JE.toJS j')
                     R.focusRef i this
+        lift $ R.stale this
 
 todo ::
     ( R.MonadReactor m

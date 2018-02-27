@@ -35,7 +35,7 @@ hdlSetFilter ::
     => R.SceneHandler m v TodoFooter TD.Filter.Filter (Which '[])
 hdlSetFilter this@(R.Obj ref its) fltr = R.terminate' . lift $ do
     R.doModifyIORef' ref (its.R.model.field @"currentFilter" .~ fltr)
-    R.rerender' this
+    R.stale this
 
 hdlSetCounts ::
     (R.MonadReactor m)
@@ -44,7 +44,7 @@ hdlSetCounts this@(R.Obj ref its) (activeCnt, completedCnt) = R.terminate' . lif
     R.doModifyIORef' ref (\s -> s
         & its.R.model.field @"activeCount" .~ activeCnt
         & its.R.model.field @"completedCount" .~ completedCnt)
-    R.rerender' this
+    R.stale this
 
 todoFooter ::
     ( R.MonadReactor m
