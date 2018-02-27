@@ -40,8 +40,8 @@ import qualified Pipes.Misc as PM
 import qualified Pipes.Prelude as PP
 import qualified Todo.App as TD.App
 import qualified Todo.App.Run as TD.App
-import qualified Todo.Footer as TD.Footer
 import qualified Todo.Filter as TD.Filter
+import qualified Todo.Footer as TD.Footer
 
 appOutline :: TD.App.Outline
 appOutline = TD.App.Schema
@@ -88,7 +88,7 @@ main = do
     hash <- js_getHash
     void $ runMaybeT $ do
         acts <- fmap TD.App.FooterAction <$> TD.Footer.withHashChange hash
-        traverse_ (\act -> lift $ atomically $ PC.send output act >>= guard) acts
+        traverse_ (\ini -> lift $ atomically $ PC.send output ini >>= guard) acts
 
     -- Run the gadget effect which reads actions from 'Pipes.Concurrent.Input'
     -- and notifies html React of any state changes.
