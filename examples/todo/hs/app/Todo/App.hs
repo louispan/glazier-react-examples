@@ -23,16 +23,16 @@ import Data.Generics.Product
 import qualified Data.JSString as J
 import Data.Maybe
 import qualified GHC.Generics as G
-import qualified Glazier.React.Framework as R
+import qualified Glazier.React.Framework as Z
 import qualified JavaScript.Extras as JE
-import qualified Todo.Filter as TD.Filter
-import qualified Todo.Footer as TD.Footer
-import qualified Todo.Todo as TD.Todo
+import qualified Todo.Filter as TD
+import qualified Todo.Footer as TD
+import qualified Todo.Todo as TD
 
 -- type TodosKey = Int
 
 -- data Command
---     = RenderCommand (R.Gizmo Model Plan) [JE.Property] J.JSVal
+--     = RenderCommand (Z.Gizmo Model Plan) [JE.Property] J.JSVal
 --     | SendTodosActionsCommand [W.List.Action TodosKey TD.Todo.Widget]
 --     | SendFooterActionCommand TD.Footer.Action
 --     | InputCommand G.Property.Command
@@ -47,25 +47,25 @@ import qualified Todo.Todo as TD.Todo
 --     | TodosAction (W.List.Action TodosKey TD.Todo.Widget)
 --     | FooterAction TD.Footer.Action
 
--- data Schema t = Schema
---     { _input :: R.Widget's t W.Input.Widget
---     , _todos :: R.Widget's t (W.List.Widget TodosKey TD.Todo.Widget)
---     , _footer :: R.Widget's t TD.Footer.Widget
---     }
+data App = App
+    { input :: J.JSString
+    -- , todos :: Z.Widget's t (W.List.Widget TodosKey TD.Todo.Widget)
+    , footer :: TD.TodoFooter
+    } deriving G.Generic
 
--- type Model = Schema R.GizmoType
--- type Outline = Schema R.OutlineType
--- instance R.ToOutline Model Outline where
---     outline (Schema a b c) = Schema (R.outline a) (R.outline b) (R.outline c)
+-- type Model = Schema Z.GizmoType
+-- type Outline = Schema Z.OutlineType
+-- instance Z.ToOutline Model Outline where
+--     outline (Schema a b c) = Schema (Z.outline a) (Z.outline b) (Z.outline c)
 
--- mkModel :: R.ReactMl () -> Outline -> F (R.Maker Action) Model
+-- mkModel :: Z.ReactMl () -> Outline -> F (Z.Maker Action) Model
 -- mkModel separator (Schema a b c) = Schema
---     <$> (R.hoistWithAction InputAction (R.mkGizmo' W.Input.widget a))
---     <*> (R.hoistWithAction TodosAction (R.mkGizmo' (W.List.widget separator TD.Todo.widget) b))
---     <*> (R.hoistWithAction FooterAction (R.mkGizmo' TD.Footer.widget c))
+--     <$> (Z.hoistWithAction InputAction (Z.mkGizmo' W.Input.widget a))
+--     <*> (Z.hoistWithAction TodosAction (Z.mkGizmo' (W.List.widget separator TD.Todo.widget) b))
+--     <*> (Z.hoistWithAction FooterAction (Z.mkGizmo' TD.Footer.widget c))
 
 -- data Plan = Plan
---     { _component :: R.ReactComponent
+--     { _component :: Z.ReactComponent
 --     , _key :: J.JSString
 --     , _frameNum :: Int
 --     , _componentRef :: J.JSVal
@@ -78,15 +78,15 @@ import qualified Todo.Todo as TD.Todo
 -- makeClassy ''Schema
 -- makeClassy ''Plan
 
--- mkPlan :: R.ReactMl () -> R.Frame Model Plan -> F (R.Maker Action) Plan
+-- mkPlan :: Z.ReactMl () -> Z.Frame Model Plan -> F (Z.Maker Action) Plan
 -- mkPlan separator mm = Plan
---     <$> R.getComponent
---     <*> R.mkKey
+--     <$> Z.getComponent
+--     <*> Z.mkKey
 --     <*> pure 0
 --     <*> pure J.nullRef
---     <*> (R.mkRenderer mm (const (render separator)))
---     <*> (R.mkHandler $ pure . pure . ComponentRefAction)
---     <*> (R.mkHandler $ pure . pure . const ToggleCompleteAllAction)
+--     <*> (Z.mkRenderer mm (const (render separator)))
+--     <*> (Z.mkHandler $ pure . pure . ComponentRefAction)
+--     <*> (Z.mkHandler $ pure . pure . const ToggleCompleteAllAction)
 
 -- instance CD.Disposing Plan
 -- instance CD.Disposing Model where
@@ -96,49 +96,49 @@ import qualified Todo.Todo as TD.Todo
 --         : foldr ((:) . CD.disposing) [] (s ^. (todos . W.List.items))
 
 -- -- Link Glazier.React.Model's HasPlan/HasModel with this widget's HasPlan/HasModel from makeClassy
--- instance HasPlan (R.Scene Model Plan) where
---     plan = R.plan
--- instance HasSchema (R.Scene Model Plan) R.GizmoType where
---     schema = R.model
--- instance HasPlan (R.Gizmo Model Plan) where
---     plan = R.scene . plan
--- instance HasSchema (R.Gizmo Model Plan) R.GizmoType where
---     schema = R.scene . schema
+-- instance HasPlan (Z.Scene Model Plan) where
+--     plan = Z.plan
+-- instance HasSchema (Z.Scene Model Plan) Z.GizmoType where
+--     schema = Z.model
+-- instance HasPlan (Z.Gizmo Model Plan) where
+--     plan = Z.scene . plan
+-- instance HasSchema (Z.Gizmo Model Plan) Z.GizmoType where
+--     schema = Z.scene . schema
 
--- type Widget = R.Widget Action Outline Model Plan Command
--- widget :: R.ReactMl () -> Widget
--- widget separator = R.Widget
+-- type Widget = Z.Widget Action Outline Model Plan Command
+-- widget :: Z.ReactMl () -> Widget
+-- widget separator = Z.Widget
 --     (mkModel separator)
 --     (mkPlan separator)
 --     window
 --     (gadget separator)
 
--- hasActiveTodos :: M.Map TodosKey (R.GizmoOf TD.Todo.Widget) -> Bool
--- hasActiveTodos = getAny . foldMap (Any . isActiveTodo . R.outline)
+-- hasActiveTodos :: M.Map TodosKey (Z.GizmoOf TD.Todo.Widget) -> Bool
+-- hasActiveTodos = getAny . foldMap (Any . isActiveTodo . Z.outline)
 
--- isActiveTodo :: (R.OutlineOf TD.Todo.Widget) -> Bool
+-- isActiveTodo :: (Z.OutlineOf TD.Todo.Widget) -> Bool
 -- isActiveTodo = view (TD.Todo.completed . to not)
 
 -- -- | This is used by parent components to render this component
--- window :: G.WindowT (R.Scene Model Plan) R.ReactMl ()
+-- window :: G.WindowT (Z.Scene Model Plan) Z.ReactMl ()
 -- window = do
 --     s <- ask
---     lift $ R.lf (s ^. component . to JE.toJSR)
+--     lift $ Z.lf (s ^. component . to JE.toJSR)
 --         [ ("key",  s ^. key . to JE.toJSR)
 --         , ("render", s ^. onRender . to JE.toJSR)
 --         , ("ref", s ^. onComponentRef . to JE.toJSR)
 --         ]
 
 -- -- | This is used by the React render callback
--- render :: R.ReactMlT Identity () -> G.WindowT (R.Scene Model Plan) R.ReactMl ()
+-- render :: Z.ReactMlT Identity () -> G.WindowT (Z.Scene Model Plan) Z.ReactMl ()
 -- render separator = do
 --     s <- ask
---     lift $ R.bh "header" [("className", "header")] $ do
---         R.bh "h1" [("key", "heading")] (R.txt "todos")
+--     lift $ Z.bh "header" [("className", "header")] $ do
+--         Z.bh "h1" [("key", "heading")] (Z.txt "todos")
 --         view G._WindowT inputWindow s
 --         view G._WindowT (mainWindow separator) s
 
--- mainWindow :: R.ReactMlT Identity () -> G.WindowT (R.Scene Model Plan) R.ReactMl ()
+-- mainWindow :: Z.ReactMlT Identity () -> G.WindowT (Z.Scene Model Plan) Z.ReactMl ()
 -- mainWindow separator = do
 --     -- only render if there are todos
 --     ts <- view (todos . W.List.items)
@@ -146,11 +146,11 @@ import qualified Todo.Todo as TD.Todo
 --         then pure ()
 --         else do
 --         s <- ask
---         lift $ R.bh "section" [ ("key", "main")
+--         lift $ Z.bh "section" [ ("key", "main")
 --                               , ("className", "main")
 --                               ] $ do
 --             -- Complete all checkbox
---             R.lf "input" [ ("key", "toggle-all")
+--             Z.lf "input" [ ("key", "toggle-all")
 --                          , ("className", "toggle-all")
 --                          , ("type", "checkbox")
 --                          , ("checked", s ^. todos . W.List.items . to (JE.toJSR . not . hasActiveTodos))
@@ -162,22 +162,22 @@ import qualified Todo.Todo as TD.Todo
 --             -- Render the footer
 --             view G._WindowT footerWindow s
 
--- inputWindow :: G.WindowT (R.Scene Model Plan) R.ReactMl ()
--- inputWindow = magnify (input . R.scene) (R.window W.Input.widget)
+-- inputWindow :: G.WindowT (Z.Scene Model Plan) Z.ReactMl ()
+-- inputWindow = magnify (input . Z.scene) (Z.window W.Input.widget)
 
--- todoListWindow :: R.ReactMlT Identity () -> G.WindowT (R.Scene Model Plan) R.ReactMl ()
--- todoListWindow separator = magnify (todos . R.scene) (R.window (W.List.widget separator TD.Todo.widget))
+-- todoListWindow :: Z.ReactMlT Identity () -> G.WindowT (Z.Scene Model Plan) Z.ReactMl ()
+-- todoListWindow separator = magnify (todos . Z.scene) (Z.window (W.List.widget separator TD.Todo.widget))
 
--- footerWindow :: G.WindowT (R.Scene Model Plan) R.ReactMl ()
--- footerWindow = magnify (footer . R.scene) (R.window TD.Footer.widget)
+-- footerWindow :: G.WindowT (Z.Scene Model Plan) Z.ReactMl ()
+-- footerWindow = magnify (footer . Z.scene) (Z.window TD.Footer.widget)
 
--- updateFooterGadget :: G.Gadget Action (R.Gizmo Model Plan) (D.DList Command)
+-- updateFooterGadget :: G.Gadget Action (Z.Gizmo Model Plan) (D.DList Command)
 -- updateFooterGadget = do
---     (active, completed) <- use (todos . W.List.items . to (M.partition (isActiveTodo . R.outline)))
+--     (active, completed) <- use (todos . W.List.items . to (M.partition (isActiveTodo . Z.outline)))
 --     pure $ D.singleton $ SendFooterActionCommand
 --                 (TD.Footer.SetCountsAction (length active) (length completed))
 
--- gadget :: R.ReactMlT Identity () -> G.Gadget Action (R.Gizmo Model Plan) (D.DList Command)
+-- gadget :: Z.ReactMlT Identity () -> G.Gadget Action (Z.Gizmo Model Plan) (D.DList Command)
 -- gadget separator = do
 --     a <- ask
 --     case a of
@@ -186,7 +186,7 @@ import qualified Todo.Todo as TD.Todo
 --             pure mempty
 
 --         RenderAction ->
---             D.singleton <$> R.basicRenderCmd frameNum componentRef RenderCommand
+--             D.singleton <$> Z.basicRenderCmd frameNum componentRef RenderCommand
 
 --         ToggleCompleteAllAction -> do
 --             s <- use (todos . W.List.items)
@@ -217,7 +217,7 @@ import qualified Todo.Todo as TD.Todo
 --             ts <- use (todos . W.List.items)
 --             -- if ts is now empty, we need to render app again (to hide todo list & footer)
 --             cmds' <- if null ts
---                 then D.singleton <$> R.basicRenderCmd frameNum componentRef RenderCommand
+--                 then D.singleton <$> Z.basicRenderCmd frameNum componentRef RenderCommand
 --                 else pure mempty
 --             cmds'' <- updateFooterGadget
 --             pure $ cmds `mappend` cmds' `mappend` cmds''
@@ -227,7 +227,7 @@ import qualified Todo.Todo as TD.Todo
 --             cmds <- todosGadget separator
 --             -- if ts was empty, we need to render app again (to hide todo list & footer)
 --             cmds' <- if null ts
---                 then D.singleton <$> R.basicRenderCmd frameNum componentRef RenderCommand
+--                 then D.singleton <$> Z.basicRenderCmd frameNum componentRef RenderCommand
 --                 else pure mempty
 --             cmds'' <- updateFooterGadget
 --             pure $ cmds `mappend` cmds' `mappend` cmds''
@@ -244,7 +244,7 @@ import qualified Todo.Todo as TD.Todo
 
 --         FooterAction TD.Footer.ClearCompletedAction -> do
 --             cmds <- footerGadget
---             (todos . W.List.items) %= M.filter (isActiveTodo . R.outline)
+--             (todos . W.List.items) %= M.filter (isActiveTodo . Z.outline)
 --             cmds' <- updateFooterGadget
 --             pure $ cmds `mappend` cmds' `D.snoc` SendTodosActionsCommand [W.List.RenderAction]
 
@@ -260,7 +260,7 @@ import qualified Todo.Todo as TD.Todo
 --         FooterAction _ -> footerGadget
 
 --   where
---     toTodoModel :: J.JSString -> TodosKey -> R.ModelOf TD.Todo.Widget
+--     toTodoModel :: J.JSString -> TodosKey -> Z.ModelOf TD.Todo.Widget
 --     toTodoModel str _ = TD.Todo.Schema
 --         str
 --         False
@@ -270,23 +270,23 @@ import qualified Todo.Todo as TD.Todo
 --     toggleCompleteAll
 --         :: Bool
 --         -> TodosKey
---         -> R.GizmoOf TD.Todo.Widget
+--         -> Z.GizmoOf TD.Todo.Widget
 --         -> D.DList (W.List.Action TodosKey TD.Todo.Widget)
 --     toggleCompleteAll b k todoGizmo =
 --         if todoGizmo ^. (TD.Todo.schema . TD.Todo.completed) /= b
 --             then D.singleton $ W.List.ItemAction k (TD.Todo.SetCompletedAction b)
 --             else mempty
 
--- inputGadget :: G.Gadget Action (R.Gizmo Model Plan) (D.DList Command)
+-- inputGadget :: G.Gadget Action (Z.Gizmo Model Plan) (D.DList Command)
 -- inputGadget = fmap InputCommand <$> magnify _InputAction (zoom input (W.Input.resetGadget go))
 --   where
 --     go ( W.Input.SubmitAction j _) = Just j
 --     go ( W.Input.CancelAction j) = Just j
 --     go _ = Nothing
 
--- todosGadget :: R.ReactMl () -> G.Gadget Action (R.Gizmo Model Plan) (D.DList Command)
+-- todosGadget :: Z.ReactMl () -> G.Gadget Action (Z.Gizmo Model Plan) (D.DList Command)
 -- todosGadget separator = fmap TodosCommand <$> magnify _TodosAction (zoom todos
---                                                          (R.gadget (W.List.widget separator TD.Todo.widget)))
+--                                                          (Z.gadget (W.List.widget separator TD.Todo.widget)))
 
--- footerGadget :: G.Gadget Action (R.Gizmo Model Plan) (D.DList Command)
--- footerGadget = fmap FooterCommand <$> magnify _FooterAction (zoom footer (R.gadget TD.Footer.widget))
+-- footerGadget :: G.Gadget Action (Z.Gizmo Model Plan) (D.DList Command)
+-- footerGadget = fmap FooterCommand <$> magnify _FooterAction (zoom footer (Z.gadget TD.Footer.widget))
