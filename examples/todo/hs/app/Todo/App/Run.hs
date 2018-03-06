@@ -13,19 +13,19 @@ import Control.Monad
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
 import Data.Foldable
-import qualified Glazier.React.Command.Run as Z
-import qualified Glazier.React.Component as Z
-import qualified Glazier.React.Widgets.Input.Run as W.Input
-import qualified Glazier.React.Widgets.List as W.List
-import qualified Glazier.React.Widgets.List.Run as W.List
+import Glazier.React.Command.Run
+import Glazier.React.Component
+import Glazier.React.Widgets.Input.Run as W.Input
+import Glazier.React.Widgets.List as W.List
+import Glazier.React.Widgets.List.Run as W.List
 import qualified Pipes.Concurrent as PC
 import Todo.App as TD.App
 import qualified Todo.Footer.Run as TD.Footer
 import qualified Todo.Todo.Run as TD.Todo
 
-run :: MVar Int -> Z.ReactComponent -> PC.Output Action -> Command -> IO ()
+run :: MVar Int -> ReactComponent -> PC.Output Action -> Command -> IO ()
 
-run _ _ _ (RenderCommand sm props j) = Z.componentSetState sm props j
+run _ _ _ (RenderCommand sm props j) = componentSetState sm props j
 
 run _ _ output (SendTodosActionsCommand acts) =
     void $ runMaybeT $

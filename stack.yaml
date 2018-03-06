@@ -39,6 +39,10 @@ packages:
 - '.'
 - location: '/Users/louis/repo/hs/alternators'
   extra-dep: true
+- location: '/Users/louis/repo/hs/arrow-extras'
+  extra-dep: true
+- location: '/Users/louis/repo/hs/glazier'
+  extra-dep: true
 - location: '/Users/louis/repo/js/glazier-react'
   extra-dep: true
 - location: '/Users/louis/repo/js/glazier-react-widget'
@@ -70,6 +74,7 @@ extra-deps:
 - generic-lens-0.5.1.0
 - monadlist-0.0.2
 - pipes-misc-0.4.0.1
+- newtype-generics-0.5.2.1
 - pipes-category-0.3.0.0
 
 # Override default flag values for local packages and extra-deps

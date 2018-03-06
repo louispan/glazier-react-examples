@@ -32,6 +32,7 @@ executable glazier-react-todo
                      , deepseq >= 1.4.2.0
                      , disposable >= 0.3.0.0
                      , dlist >= 0.8
+                     , esoteric-extras >= 0.0.1.0
                      , generic-lens >= 0.5.1.0
                      , glazier-react >= 0.7
                      , glazier-react-widget >= 0.7

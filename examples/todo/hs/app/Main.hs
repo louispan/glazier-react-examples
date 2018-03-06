@@ -24,15 +24,15 @@ import qualified GHCJS.Foreign.Callback as J
 import qualified GHCJS.Marshal.Pure as J
 import qualified GHCJS.Types as J
 import qualified Glazier as G
-import qualified Glazier.React.Component as Z
-import qualified Glazier.React.Maker as Z
-import qualified Glazier.React.Maker.Run as Z.Maker
-import qualified Glazier.React.Markup as Z
-import qualified Glazier.React.Model as Z
-import qualified Glazier.React.ReactDOM as RD
-import qualified Glazier.React.Widget as Z
-import qualified Glazier.React.Widgets.Input as W.Input
-import qualified Glazier.React.Widgets.List as W.List
+import Glazier.React.Component
+import Glazier.React.Maker
+import Glazier.React.Maker.Run.Maker
+import Glazier.React.Markup
+import Glazier.React.Model
+import Glazier.React.ReactDOM as RD
+import Glazier.React.Widget
+import Glazier.React.Widgets.Input as W.Input
+import Glazier.React.Widgets.List as W.List
 import qualified Pipes as P
 import qualified Pipes.Concurrent as PC
 import qualified Pipes.Lift as PL
@@ -68,20 +68,20 @@ main = do
 
     muid <- newMVar 0
 
-    component <- Z.mkComponent
+    component <- mkComponent
 
     let appWidget = TD.App.widget mempty
     -- App Model
-    s <- iterM (Z.Maker.run muid component output) (Z.mkGizmo' appWidget appOutline)
+    s <- iterM (Maker.run muid component output) (mkGizmo' appWidget appOutline)
 
     -- Start the App render
     root <- js_getElementById "root"
-    e <- Z.markedElement (hoist (hoist generalize) (Z.window appWidget)) (s ^. Z.scene)
+    e <- markedElement (hoist (hoist generalize) (window appWidget)) (s ^. scene)
     RD.render (J.pToJSVal e) root
 
     -- The footer uses hashChange to fire events
-    onHashChange' <- iterM (Z.Maker.run muid component output)
-        (Z.hoistWithAction TD.App.FooterAction (Z.mkHandler TD.Footer.onHashChange))
+    onHashChange' <- iterM (Maker.run muid component output)
+        (hoistWithAction TD.App.FooterAction (mkHandler TD.Footer.onHashChange))
     js_addHashChangeListener onHashChange'
 
     -- Fire the initial hashChange action
@@ -93,7 +93,7 @@ main = do
     -- Run the gadget effect which reads actions from 'Pipes.Concurrent.Input'
     -- and notifies html React of any state changes.
     -- runEffect will only stop if input is finished (which in this example never does).
-    s' <- P.runEffect $ appEffect (Z.gadget appWidget) s muid component output input
+    s' <- P.runEffect $ appEffect (gadget appWidget) s muid component output input
 
     -- Cleanup
     -- We actually never get here because in this example runEffect never quits
@@ -104,13 +104,13 @@ main = do
 
 appEffect
     :: MonadIO io
-    => Z.GadgetOf TD.App.Widget
-    -> Z.GizmoOf TD.App.Widget
+    => GadgetOf TD.App.Widget
+    -> GizmoOf TD.App.Widget
     -> MVar Int
-    -> Z.ReactComponent
+    -> ReactComponent
     -> PC.Output TD.App.Action
     -> PC.Input TD.App.Action
-    -> P.Effect io (Z.GizmoOf TD.App.Widget)
+    -> P.Effect io (GizmoOf TD.App.Widget)
 appEffect appGadget s muid component output input =
     PL.execStateP s $
         appProducerIO appGadget input P.>->
@@ -119,32 +119,32 @@ appEffect appGadget s muid component output input =
 
 appProducerIO
     :: MonadIO io
-    => Z.GadgetOf TD.App.Widget
+    => GadgetOf TD.App.Widget
     -> PC.Input TD.App.Action
-    -> P.Producer' (D.DList TD.App.Command) (StateT (Z.GizmoOf TD.App.Widget) io) ()
+    -> P.Producer' (D.DList TD.App.Command) (StateT (GizmoOf TD.App.Widget) io) ()
 appProducerIO appGadget input = hoist (hoist (liftIO . atomically)) (appProducer appGadget input)
 
 appProducer
-    :: Z.GadgetOf TD.App.Widget
+    :: GadgetOf TD.App.Widget
     -> PC.Input TD.App.Action
-    -> P.Producer' (D.DList TD.App.Command) (StateT (Z.GizmoOf TD.App.Widget) STM) ()
+    -> P.Producer' (D.DList TD.App.Command) (StateT (GizmoOf TD.App.Widget) STM) ()
 appProducer appGadget input = PM.execInput input go'
   where
     go = (runMaybeT .) . runReaderT . G.runGadgetT $ hoist generalize appGadget
     go' = fmap (fromMaybe mempty) <$> go
 
 runCommandsPipe
-    :: (MonadState (Z.GizmoOf TD.App.Widget) io, MonadIO io)
+    :: (MonadState (GizmoOf TD.App.Widget) io, MonadIO io)
     => MVar Int
-    -> Z.ReactComponent
+    -> ReactComponent
     -> PC.Output TD.App.Action
     -> P.Pipe (D.DList TD.App.Command) () io ()
 runCommandsPipe muid component output = PP.mapM (runCommands muid component output)
 
 runCommands
-    :: (Foldable t, MonadState (Z.GizmoOf TD.App.Widget) io, MonadIO io)
+    :: (Foldable t, MonadState (GizmoOf TD.App.Widget) io, MonadIO io)
     => MVar Int
-    -> Z.ReactComponent
+    -> ReactComponent
     -> PC.Output TD.App.Action
     -> t TD.App.Command
     -> io ()

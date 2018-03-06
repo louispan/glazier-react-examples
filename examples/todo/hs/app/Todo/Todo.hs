@@ -8,6 +8,7 @@
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -17,15 +18,15 @@ module Todo.Todo where
 import Control.Lens
 import Control.Monad
 import Control.Monad.Trans.Class
-import Control.Monad.Trans.Cont
 import Control.Monad.Trans.Maybe
 import Data.Diverse.Profunctor
 import qualified Data.DList as DL
 import Data.Generics.Product
 import qualified Data.JSString as J
+import Esoteric
 import qualified GHC.Generics as G
-import qualified Glazier.React.Framework as Z
-import qualified Glazier.React.Widget as W
+import Glazier.React.Framework
+import qualified Glazier.React.Widget.Input as W
 import qualified JavaScript.Extras as JE
 
 data TodoInfo = TodoInfo
@@ -34,143 +35,149 @@ data TodoInfo = TodoInfo
     , editing :: Bool
     } deriving G.Generic
 
-todoToggleComplete :: (Z.MonadReactor m) => Z.Prototype m v TodoInfo (Which '[])
-todoToggleComplete = W.checkboxInput (Z.GadgetId "toggle")
-    & Z.modifyDisplay fdisp
-    & Z.magnifyPrototype (field @"completed")
+todoToggleComplete :: (MonadReactor m) => Prototype p TodoInfo m ()
+todoToggleComplete = W.checkboxInput (GadgetId "toggle")
+    & _display %~ fdisp
+    & magnifyPrototype (field @"completed")
  where
-    fdisp disp s = Z.modifySurfaceProperties fprops (disp s)
-    fprops = (`DL.snoc` ("className", "toggle"))
+    fdisp disp = method' $ \s -> modifySurfaceProperties
+        (`DL.snoc` ("className", "toggle")) (runMethod' disp s)
 
 data TodoDestroy = TodoDestroy
 
-todoDestroy :: (Z.MonadReactor m) => Z.Prototype m v s (Which '[TodoDestroy])
-todoDestroy = Z.nulPrototype
-    { Z.display = \s -> Z.lf' gid s "button"
+todoDestroy :: (MonadReactor m) => Prototype p s m TodoDestroy
+todoDestroy = mempty
+    { display = method' $ \s -> lf' gid s "button"
             [ ("key", "destroy")
             , ("className", "destroy")]
-    , Z.initializer = Z.trigger' gid "onClick" (pickOnly TodoDestroy)
+    , initializer = trigger' gid "onClick" TodoDestroy
     }
   where
-    gid = Z.GadgetId "destroy"
+    gid = GadgetId "destroy"
 
 data TodoStartEdit = TodoStartEdit
 
-todoLabel :: (Z.MonadReactor m) => Z.Prototype m v TodoInfo (Which '[TodoStartEdit])
-todoLabel = Z.nulPrototype
-        { Z.display = disp
-        , Z.initializer = Z.trigger' gid "onDoubleClick" (pickOnly TodoStartEdit)
+todoLabel :: (MonadReactor m) => Prototype p TodoInfo m TodoStartEdit
+todoLabel = mempty
+        { display = disp
+        , initializer = trigger' gid "onDoubleClick" TodoStartEdit
         }
   where
-    gid = Z.GadgetId "label"
-    disp :: (Z.MonadReactor m) => Z.FrameDisplay m TodoInfo ()
-    disp s = Z.bh' gid s "label" [("key", "label")] $
-                Z.txt (s ^. Z.model.field @"value")
+    gid = GadgetId "label"
+    disp :: (MonadReactor m) => FrameDisplay TodoInfo m ()
+    disp = method' $ \s ->  bh' gid s "label" [("key", "label")] $
+                txt (s ^. _model.field @"value")
 
-todoView :: (Z.MonadReactor m) => Z.Prototype m v TodoInfo (Which '[TodoDestroy, TodoStartEdit])
+todoView :: (MonadReactor m) => Prototype p TodoInfo m (Which '[TodoDestroy, TodoStartEdit])
 todoView =
     let p = todoToggleComplete
-            `Z.alsoPrototype` todoDestroy
-            `Z.alsoPrototype` todoLabel
-        disp = Z.display p
-    in p { Z.display = \s -> Z.bh "div"
+            !*> (pickOnly <$> todoDestroy)
+            `also` (pickOnly <$> todoLabel)
+        disp = display p
+    in p { display = method' $ \s -> bh "div"
                 [ ("key", "view")
                 , ("className", "view")]
-                (disp s) }
+                (runMethod' disp s) }
 
 todoInput ::
-    ( Z.MonadReactor m
-    , Z.MonadJS m
-    , Z.MonadHTMLElement m
+    ( MonadReactor m
+    , MonadJS m
+    , MonadHTMLElement m
     )
-    => Z.Prototype m v TodoInfo (Which '[TodoDestroy])
+    => Prototype p TodoInfo m TodoDestroy
 todoInput = (W.textInput gid)
-    & Z.magnifyPrototype (field @"value")
-    & Z.modifyInitializer fini
-    & Z.modifyDisplay fdisp
+    & magnifyPrototype (field @"value")
+    & _initializer %~ fini
+    & _display %~ fdisp
   where
-    gid = Z.GadgetId "input"
-    fdisp disp s = Z.modifySurfaceProperties fprops (disp s)
-    fprops = (`DL.snoc` ("className", "edit"))
+    gid = GadgetId "input"
+    fdisp disp = method' $ \s -> modifySurfaceProperties
+        (`DL.snoc` ("className", "edit")) (runMethod' disp s)
     fini ini = ini
-        `Z.alsoInitializer` (Z.trigger' gid "onFocus" () `Z.handledBy` hdlFocus)
-        `Z.alsoInitializer` (Z.trigger' gid "onBlur" () `Z.handledBy` hdlBlur)
-        `Z.alsoInitializer` (Z.trigger' gid "onBlur" () `Z.handledBy` hdlBlur)
-        `Z.alsoInitializer` (Z.trigger gid "onKeyDown" (runMaybeT . Z.fireKeyDownKey) id
-            `Z.handledBy` Z.maybeHandle hdlKeyDown)
+        !*> (trigger' gid "onFocus" () >>= hdlFocus)
+        !*> (trigger' gid "onBlur" () >>= hdlBlur)
+        !*> (trigger gid "onKeyDown" (runMaybeT . fireKeyDownKey) id
+            >>= maybe mempty hdlKeyDown)
 
-    hdlFocus :: (Z.MonadReactor m)
-        => Z.SceneHandler m v TodoInfo a (Which '[])
-    hdlFocus this@(Z.Obj ref its) _ = Z.terminate' . lift $ do
-        Z.doModifyIORef' ref (its.Z.model.field @"editing" .~ True)
-        Z.dirty this
+    hdlFocus :: (MonadReactor m)
+        => a -> Delegate (Scene p m TodoInfo) m ()
+    hdlFocus _ = delegate' $ \this@Obj{..} -> lift $ do
+        doModifyIORef' self (my._model.field @"editing" .~ True)
+        dirty this
 
-    hdlBlur :: (Z.MonadReactor m)
-        => Z.SceneHandler m v TodoInfo a (Which '[])
-    hdlBlur this@(Z.Obj ref its) _ = Z.terminate' . lift $ do
-        Z.doModifyIORef' ref (\s -> s
-            & its.Z.model.field @"editing" .~ False
-            & its.Z.model.field @"value" %~ J.strip)
-        Z.dirty this
+    hdlBlur :: (MonadReactor m)
+        => a -> Delegate (Scene p m TodoInfo) m ()
+    hdlBlur _ = delegate' $ \this@Obj{..} -> lift $ do
+        doModifyIORef' self (\me -> me
+            & my._model.field @"editing" .~ False
+            & my._model.field @"value" %~ J.strip)
+        dirty this
 
     hdlKeyDown ::
-        ( Z.MonadReactor m
-        , Z.MonadHTMLElement m
+        ( MonadReactor m
+        , MonadHTMLElement m
         )
-        => Z.SceneHandler m v TodoInfo Z.KeyDownKey (Which '[TodoDestroy])
-    hdlKeyDown this@(Z.Obj ref its) (Z.KeyDownKey _ key) = ContT $ \fire ->
+        => KeyDownKey -> Delegate (Scene p m TodoInfo) m TodoDestroy
+    hdlKeyDown (KeyDownKey _ key) = delegate'' $ \this@Obj{..} fire ->
         case key of
             -- NB. Enter and Escape doesn't generate a onChange event
             -- So there is no adverse interation with W.input onChange
             -- updating the value under our feet.
             "Enter" -> do
-                obj <- Z.doReadIORef ref
-                let v = obj ^. its.Z.model.field @"value"
+                me <- doReadIORef self
+                let v = me ^. my._model.field @"value"
                     v' = J.strip v
                 if J.null v'
                     then
-                        fire $ pickOnly TodoDestroy
+                        fire TodoDestroy
                     else do
-                        Z.doModifyIORef' ref (\s -> s
-                            & its.Z.model.field @"editing" .~ False
-                            & its.Z.model.field @"value" .~ v')
-                        Z.dirty this
+                        doModifyIORef' self (\me' -> me'
+                            & my._model.field @"editing" .~ False
+                            & my._model.field @"value" .~ v')
+                        dirty this
 
             "Escape" -> do
-                Z.blurRef gid this -- The onBlur handler will trim the value
+                blurRef gid this -- The onBlur handler will trim the value
 
             _ -> pure ()
 
 todo ::
-    ( Z.MonadReactor m
-    , Z.MonadJS m
-    , Z.MonadHTMLElement m
-    ) => Z.Prototype m v TodoInfo (Which '[TodoDestroy])
+    ( MonadReactor m
+    , MonadJS m
+    , MonadHTMLElement m
+    ) => Prototype p TodoInfo m (Which '[TodoDestroy])
 todo =
-    let p = todoView `Z.alsoPrototype` todoInput
-    in p & Z.modifyDisplay fdisp
-        & Z.modifyInitializer (`Z.handledBy'` (Z.obviousHandler $ hdlStartEdit (Z.GadgetId "input")))
+    let p = todoView `also` (pickOnly <$> todoInput)
+    in p & (_display %~ fdisp)
+        & (_initializer %~ fini)
   where
-    fdisp disp s =
-        let s' = s ^. Z.model
-        in Z.bh "div"
+    fdisp disp = method' $ \s ->
+        let s' = s ^. _model
+        in bh "div"
             [ ("className", JE.classNames
                 [ ("completed", completed s')
                 , ("editing", editing s')])
             ]
-            (disp s)
+            (runMethod' disp s)
+    fini ini = ini >>= (injectedK hdlStartEdit')
+
+    hdlStartEdit' ::
+        ( MonadReactor m
+        , MonadHTMLElement m)
+        => Which '[TodoStartEdit] -> Delegate (Scene p m TodoInfo) m (Which '[])
+    hdlStartEdit' a = hdlStartEdit (GadgetId "input") (obvious a) >>= (const' zilch)
 
     hdlStartEdit ::
-        ( Z.MonadReactor m
-        , Z.MonadHTMLElement m)
-        => Z.GadgetId -> Z.SceneHandler m v TodoInfo TodoStartEdit (Which '[])
-    hdlStartEdit i this@(Z.Obj ref its) _ = Z.terminate' $ lift $ do
+        ( MonadReactor m
+        , MonadHTMLElement m)
+        => GadgetId -> TodoStartEdit -> Delegate (Scene p m TodoInfo) m ()
+    hdlStartEdit i _ = delegate' $ \this@Obj{..} -> lift $ do
         void $ runMaybeT $ do
-            obj <- lift $ Z.doReadIORef ref
+            me <- lift $ doReadIORef self
             -- don't allow editing of completed todos
-            let b = obj ^. its.Z.model.field @"completed"
+            let b = me ^. my._model.field @"completed"
             guard (not b)
-            lift $ Z.doModifyIORef' ref (\s -> s
-                & its.Z.model.field @"editing" .~ True
+            lift $ doModifyIORef' self (\s -> s
+                & my._model.field @"editing" .~ True
                 )
-            lift $ Z.focusRef i this
+            lift $ focusRef i this
