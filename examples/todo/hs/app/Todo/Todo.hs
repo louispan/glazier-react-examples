@@ -159,13 +159,9 @@ todo =
                 , ("editing", editing s')])
             ]
             (runMethod' disp s)
-    fini ini = ini >>= (injectedK hdlStartEdit')
 
-    hdlStartEdit' ::
-        ( MonadReactor m
-        , MonadHTMLElement m)
-        => Which '[TodoStartEdit] -> Delegate (Scene p m TodoInfo) m (Which '[])
-    hdlStartEdit' a = hdlStartEdit (GadgetId "input") (obvious a) >>= (const' zilch)
+    fini ini = ini >>= (injectedK hdlStartEdit')
+    hdlStartEdit' a = hdlStartEdit (GadgetId "input") (obvious a) !*> zilch
 
     hdlStartEdit ::
         ( MonadReactor m

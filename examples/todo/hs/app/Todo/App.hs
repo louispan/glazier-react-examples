@@ -23,7 +23,9 @@ import Data.Generics.Product
 import qualified Data.JSString as J
 import Data.Maybe
 import qualified GHC.Generics as G
+import Glazier.React.Event.HashChange
 import Glazier.React.Framework
+import qualified Glazier.React.Widget.Input as W
 import qualified JavaScript.Extras as JE
 import qualified Todo.Filter as TD
 import qualified Todo.Footer as TD
@@ -53,65 +55,25 @@ data App = App
     , footer :: TD.TodoFooter
     } deriving G.Generic
 
--- type Model = Schema GizmoType
--- type Outline = Schema OutlineType
--- instance ToOutline Model Outline where
---     outline (Schema a b c) = Schema (outline a) (outline b) (outline c)
-
--- mkModel :: ReactMl () -> Outline -> F (Maker Action) Model
--- mkModel separator (Schema a b c) = Schema
---     <$> (hoistWithAction InputAction (mkGizmo' W.Input.widget a))
---     <*> (hoistWithAction TodosAction (mkGizmo' (W.List.widget separator TD.Todo.widget) b))
---     <*> (hoistWithAction FooterAction (mkGizmo' TD.Footer.widget c))
-
--- data Plan = Plan
---     { _component :: ReactComponent
---     , _key :: J.JSString
---     , _frameNum :: Int
---     , _componentRef :: J.JSVal
---     , _onRender ::  J.Callback (J.JSVal -> IO J.JSVal)
---     , _onComponentRef :: J.Callback (J.JSVal -> IO ())
---     , _fireToggleCompleteAll :: J.Callback (J.JSVal -> IO ())
---     } deriving (G.Generic)
-
--- makeClassyPrisms ''Action
--- makeClassy ''Schema
--- makeClassy ''Plan
-
--- mkPlan :: ReactMl () -> Frame Model Plan -> F (Maker Action) Plan
--- mkPlan separator mm = Plan
---     <$> getComponent
---     <*> mkKey
---     <*> pure 0
---     <*> pure J.nullRef
---     <*> (mkRenderer mm (const (render separator)))
---     <*> (mkHandler $ pure . pure . ComponentRefAction)
---     <*> (mkHandler $ pure . pure . const ToggleCompleteAllAction)
-
--- instance CD.Disposing Plan
--- instance CD.Disposing Model where
---     disposing s = CD.DisposeList $
---         CD.disposing (s ^. input)
---         : CD.disposing (s ^. footer)
---         : foldr ((:) . CD.disposing) [] (s ^. (todos . W.List.items))
-
--- -- Link Glazier.React.Model's HasPlan/HasModel with this widget's HasPlan/HasModel from makeClassy
--- instance HasPlan (Scene Model Plan) where
---     plan = plan
--- instance HasSchema (Scene Model Plan) GizmoType where
---     schema = model
--- instance HasPlan (Gizmo Model Plan) where
---     plan = scene . plan
--- instance HasSchema (Gizmo Model Plan) GizmoType where
---     schema = scene . schema
-
--- type Widget = Widget Action Outline Model Plan Command
--- widget :: ReactMl () -> Widget
--- widget separator = Widget
---     (mkModel separator)
---     (mkPlan separator)
---     window
---     (gadget separator)
+appInput ::
+    ( MonadReactor m
+    , MonadJS m
+    , MonadHTMLElement m
+    )
+    => Prototype p TodoInfo m TodoDestroy
+appInput = (W.textInput gid)
+    & magnifyPrototype (field @"input")
+    & _initializer %~ fini
+    & _display %~ fdisp
+  where
+    gid = GadgetId "input"
+    fdisp disp = method' $ \s -> modifySurfaceProperties
+        (`DL.snoc` ("className", "edit")) (runMethod' disp s)
+    fini ini = ini
+        !*> (trigger' gid "onFocus" () >>= hdlFocus)
+        !*> (trigger' gid "onBlur" () >>= hdlBlur)
+        !*> (trigger gid "onKeyDown" (runMaybeT . fireKeyDownKey) id
+            >>= maybe mempty hdlKeyDown)
 
 -- hasActiveTodos :: M.Map TodosKey (GizmoOf TD.Todo.Widget) -> Bool
 -- hasActiveTodos = getAny . foldMap (Any . isActiveTodo . outline)
@@ -119,24 +81,14 @@ data App = App
 -- isActiveTodo :: (OutlineOf TD.Todo.Widget) -> Bool
 -- isActiveTodo = view (TD.Todo.completed . to not)
 
--- -- | This is used by parent components to render this component
--- window :: G.WindowT (Scene Model Plan) ReactMl ()
--- window = do
---     s <- ask
---     lift $ lf (s ^. component . to JE.toJSR)
---         [ ("key",  s ^. key . to JE.toJSR)
---         , ("render", s ^. onRender . to JE.toJSR)
---         , ("ref", s ^. onComponentRef . to JE.toJSR)
---         ]
-
 -- -- | This is used by the React render callback
--- render :: ReactMlT Identity () -> G.WindowT (Scene Model Plan) ReactMl ()
--- render separator = do
+-- displayApp :: G.WindowT (Scene Model Plan) ReactMl ()
+-- displayApp = do
 --     s <- ask
 --     lift $ bh "header" [("className", "header")] $ do
 --         bh "h1" [("key", "heading")] (txt "todos")
 --         view G._WindowT inputWindow s
---         view G._WindowT (mainWindow separator) s
+--         view G._WindowT mainWindow s
 
 -- mainWindow :: ReactMlT Identity () -> G.WindowT (Scene Model Plan) ReactMl ()
 -- mainWindow separator = do
@@ -290,3 +242,22 @@ data App = App
 
 -- footerGadget :: G.Gadget Action (Gizmo Model Plan) (D.DList Command)
 -- footerGadget = fmap FooterCommand <$> magnify _FooterAction (zoom footer (gadget TD.Footer.widget))
+
+
+-- -- | This needs to be explictly registered by the Main app
+-- onHashChange ::  NativeEvent -> MaybeT IO [Action]
+-- onHashChange = eventHandlerM whenHashChange withHashChange
+
+whenHashChange :: NativeEvent -> MaybeT IO J.JSString
+whenHashChange evt = do
+    hevt <- MaybeT $ pure $ toHashChangeEvent evt
+    let n = newURL hevt
+        (_, n') = J.breakOn "#" n
+    pure n'
+
+withHashChange :: J.JSString -> TD.Filter.Filter
+withHashChange newHash =
+    case newHash of
+        "#/active" -> TD.Filter.Active
+        "#/completed" -> TD.Filter.Completed
+        _ -> TD.Filter.All
