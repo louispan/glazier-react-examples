@@ -22,15 +22,15 @@ import qualified Data.JSString as J
 import qualified GHC.Generics as G
 import Glazier.React.Framework
 import qualified JavaScript.Extras as JE
-import qualified Todo.Filter as TD.Filter
+import qualified Todo.Filter as TD
 
 data TodoFooter = TodoFooter
     { activeCount :: Int
     , completedCount :: Int
-    , currentFilter :: TD.Filter.Filter
+    , currentFilter :: TD.Filter
     } deriving G.Generic
 
-hdlSetFilter :: MonadReactor m => TD.Filter.Filter -> MethodT (Scene p m TodoFooter) m ()
+hdlSetFilter :: MonadReactor m => TD.Filter -> MethodT (Scene p m TodoFooter) m ()
 hdlSetFilter fltr = readrT' $ \this@Obj{..} -> lift $ do
     doModifyIORef' self (my._model.field @"currentFilter" .~ fltr)
     dirty this
@@ -67,7 +67,7 @@ todoDisplay s = do
                          , ("key", "all")
                          , ("className", JE.classNames
                             [("selected"
-                            , s ^. _model.field @"currentFilter" == TD.Filter.All)])
+                            , s ^. _model.field @"currentFilter" == TD.All)])
                          ] $
                 txt "All"
             txt " "
@@ -77,7 +77,7 @@ todoDisplay s = do
                 , ("key", "active")
                 , ("className", JE.classNames
                     [("selected"
-                    , s ^. _model.field @"currentFilter" == TD.Filter.Active)])
+                    , s ^. _model.field @"currentFilter" == TD.Active)])
                 ] $
                 txt "Active"
             txt " "
@@ -87,7 +87,7 @@ todoDisplay s = do
                     , ("key", "completed")
                     , ("className", JE.classNames
                         [("selected"
-                        , s ^. _model.field @"currentFilter" == TD.Filter.Completed)])
+                        , s ^. _model.field @"currentFilter" == TD.Completed)])
                     ] $
                     txt "Completed"
         if (s ^. _model.field @"completedCount" > 0)

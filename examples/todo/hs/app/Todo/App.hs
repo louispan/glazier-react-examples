@@ -5,8 +5,10 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -16,12 +18,12 @@ module Todo.App where
 import Control.Lens
 import Control.Monad
 import Control.Monad.Trans.Class
-import Control.Monad.Trans.Cont
 import Control.Monad.Trans.Maybe
 import Data.Diverse.Profunctor
+import qualified Data.DList as DL
 import Data.Generics.Product
 import qualified Data.JSString as J
-import Data.Maybe
+import Esoteric
 import qualified GHC.Generics as G
 import Glazier.React.Event.HashChange
 import Glazier.React.Framework
@@ -50,30 +52,66 @@ import qualified Todo.Todo as TD
 --     | FooterAction TD.Footer.Action
 
 data App = App
-    { input :: J.JSString
+    { newtodo :: J.JSString
     -- , todos :: Widget's t (W.List.Widget TodosKey TD.Todo.Widget)
     , footer :: TD.TodoFooter
     } deriving G.Generic
 
-appInput ::
+newtype NewTodo = NewTodo J.JSString
+
+newtodoInput ::
     ( MonadReactor m
     , MonadJS m
     , MonadHTMLElement m
     )
-    => Prototype p TodoInfo m TodoDestroy
-appInput = (W.textInput gid)
-    & magnifyPrototype (field @"input")
-    & _initializer %~ fini
-    & _display %~ fdisp
+    => Prototype p J.JSString m NewTodo
+newtodoInput = (W.textInput gid)
+    -- & magnifyPrototype (field @"newtodo")
+    & _initializer %~ fi
+    & _display %~ fd
   where
     gid = GadgetId "input"
-    fdisp disp = method' $ \s -> modifySurfaceProperties
-        (`DL.snoc` ("className", "edit")) (runMethod' disp s)
-    fini ini = ini
-        !*> (trigger' gid "onFocus" () >>= hdlFocus)
+
+    fd disp s = modifySurfaceProperties
+        (`DL.snoc` ("className", "new-todo")) (disp s)
+
+    fi ini = ini
         !*> (trigger' gid "onBlur" () >>= hdlBlur)
         !*> (trigger gid "onKeyDown" (runMaybeT . fireKeyDownKey) id
             >>= maybe mempty hdlKeyDown)
+
+    hdlBlur :: (MonadReactor m)
+        => a -> MethodT (Scene p m J.JSString) m ()
+    hdlBlur _ = readrT' $ \this@Obj{..} -> lift $ do
+        doModifyIORef' self (\me -> me
+            & my._model %~ J.strip)
+        dirty this
+
+    hdlKeyDown ::
+        ( MonadReactor m
+        , MonadHTMLElement m
+        )
+        => KeyDownKey -> MethodT (Scene p m J.JSString) m NewTodo
+    hdlKeyDown (KeyDownKey _ key) = methodT' $ \this@Obj{..} fire ->
+        case key of
+            -- NB. Enter and Escape doesn't generate a onChange event
+            -- So there is no adverse interation with W.input onChange
+            -- updating the value under our feet.
+            "Enter" -> do
+                me <- doReadIORef self
+                let v = me ^. my._model
+                    v' = J.strip v
+                doModifyIORef' self (\me' -> me'
+                    & my._model .~ J.empty)
+                if J.null v'
+                    then pure ()
+                    else fire $ NewTodo v'
+                dirty this
+
+            "Escape" -> do
+                blurRef gid this -- The onBlur handler will trim the value
+
+            _ -> pure ()
 
 -- hasActiveTodos :: M.Map TodosKey (GizmoOf TD.Todo.Widget) -> Bool
 -- hasActiveTodos = getAny . foldMap (Any . isActiveTodo . outline)
@@ -255,9 +293,9 @@ whenHashChange evt = do
         (_, n') = J.breakOn "#" n
     pure n'
 
-withHashChange :: J.JSString -> TD.Filter.Filter
+withHashChange :: J.JSString -> TD.Filter
 withHashChange newHash =
     case newHash of
-        "#/active" -> TD.Filter.Active
-        "#/completed" -> TD.Filter.Completed
-        _ -> TD.Filter.All
+        "#/active" -> TD.Active
+        "#/completed" -> TD.Completed
+        _ -> TD.All

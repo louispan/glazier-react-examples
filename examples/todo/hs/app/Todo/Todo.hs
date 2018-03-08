@@ -35,15 +35,16 @@ data TodoInfo = TodoInfo
     , editing :: Bool
     } deriving G.Generic
 
+data TodoDestroy = TodoDestroy
+data TodoStartEdit = TodoStartEdit
+
 todoToggleComplete :: (MonadReactor m) => Prototype p TodoInfo m ()
 todoToggleComplete = W.checkboxInput (GadgetId "toggle")
-    & _display %~ fdisp
+    & _display %~ fd
     & magnifyPrototype (field @"completed")
  where
-    fdisp disp s = modifySurfaceProperties
+    fd disp s = modifySurfaceProperties
         (`DL.snoc` ("className", "toggle")) (disp s)
-
-data TodoDestroy = TodoDestroy
 
 todoDestroy :: (MonadReactor m) => Prototype p s m TodoDestroy
 todoDestroy = mempty
@@ -55,7 +56,6 @@ todoDestroy = mempty
   where
     gid = GadgetId "destroy"
 
-data TodoStartEdit = TodoStartEdit
 
 todoLabel :: (MonadReactor m) => Prototype p TodoInfo m TodoStartEdit
 todoLabel = mempty
@@ -87,13 +87,13 @@ todoInput ::
     => Prototype p TodoInfo m TodoDestroy
 todoInput = (W.textInput gid)
     & magnifyPrototype (field @"value")
-    & _initializer %~ fini
-    & _display %~ fdisp
+    & _initializer %~ fi
+    & _display %~ fd
   where
     gid = GadgetId "input"
-    fdisp disp s = modifySurfaceProperties
+    fd disp s = modifySurfaceProperties
         (`DL.snoc` ("className", "edit")) (disp s)
-    fini ini = ini
+    fi ini = ini
         !*> (trigger' gid "onFocus" () >>= hdlFocus)
         !*> (trigger' gid "onBlur" () >>= hdlBlur)
         !*> (trigger gid "onKeyDown" (runMaybeT . fireKeyDownKey) id
@@ -148,10 +148,10 @@ todo ::
     ) => Prototype p TodoInfo m (Which '[TodoDestroy])
 todo =
     let p = todoView `also` (pickOnly <$> todoInput)
-    in p & (_display %~ fdisp)
-        & (_initializer %~ fini)
+    in p & (_display %~ fd)
+        & (_initializer %~ fi)
   where
-    fdisp disp s =
+    fd disp s =
         let s' = s ^. _model
         in bh "div"
             [ ("className", JE.classNames
@@ -160,7 +160,7 @@ todo =
             ]
             (disp s)
 
-    fini ini = ini >>= (injectedK hdlStartEdit')
+    fi ini = ini >>= (injectedK hdlStartEdit')
     hdlStartEdit' a = hdlStartEdit (GadgetId "input") (obvious a) !*> zilch
 
     hdlStartEdit ::
