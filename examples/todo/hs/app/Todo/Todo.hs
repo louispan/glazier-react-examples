@@ -40,14 +40,14 @@ todoToggleComplete = W.checkboxInput (GadgetId "toggle")
     & _display %~ fdisp
     & magnifyPrototype (field @"completed")
  where
-    fdisp disp = method' $ \s -> modifySurfaceProperties
-        (`DL.snoc` ("className", "toggle")) (runMethod' disp s)
+    fdisp disp s = modifySurfaceProperties
+        (`DL.snoc` ("className", "toggle")) (disp s)
 
 data TodoDestroy = TodoDestroy
 
 todoDestroy :: (MonadReactor m) => Prototype p s m TodoDestroy
 todoDestroy = mempty
-    { display = method' $ \s -> lf' gid s "button"
+    { display = \s -> lf' gid s "button"
             [ ("key", "destroy")
             , ("className", "destroy")]
     , initializer = trigger' gid "onClick" TodoDestroy
@@ -65,7 +65,7 @@ todoLabel = mempty
   where
     gid = GadgetId "label"
     disp :: (MonadReactor m) => FrameDisplay TodoInfo m ()
-    disp = method' $ \s ->  bh' gid s "label" [("key", "label")] $
+    disp s = bh' gid s "label" [("key", "label")] $
                 txt (s ^. _model.field @"value")
 
 todoView :: (MonadReactor m) => Prototype p TodoInfo m (Which '[TodoDestroy, TodoStartEdit])
@@ -74,10 +74,10 @@ todoView =
             !*> (pickOnly <$> todoDestroy)
             `also` (pickOnly <$> todoLabel)
         disp = display p
-    in p { display = method' $ \s -> bh "div"
+    in p { display = \s -> bh "div"
                 [ ("key", "view")
                 , ("className", "view")]
-                (runMethod' disp s) }
+                (disp s) }
 
 todoInput ::
     ( MonadReactor m
@@ -91,8 +91,8 @@ todoInput = (W.textInput gid)
     & _display %~ fdisp
   where
     gid = GadgetId "input"
-    fdisp disp = method' $ \s -> modifySurfaceProperties
-        (`DL.snoc` ("className", "edit")) (runMethod' disp s)
+    fdisp disp s = modifySurfaceProperties
+        (`DL.snoc` ("className", "edit")) (disp s)
     fini ini = ini
         !*> (trigger' gid "onFocus" () >>= hdlFocus)
         !*> (trigger' gid "onBlur" () >>= hdlBlur)
@@ -100,14 +100,14 @@ todoInput = (W.textInput gid)
             >>= maybe mempty hdlKeyDown)
 
     hdlFocus :: (MonadReactor m)
-        => a -> Delegate (Scene p m TodoInfo) m ()
-    hdlFocus _ = delegate' $ \this@Obj{..} -> lift $ do
+        => a -> MethodT (Scene p m TodoInfo) m ()
+    hdlFocus _ = readrT' $ \this@Obj{..} -> lift $ do
         doModifyIORef' self (my._model.field @"editing" .~ True)
         dirty this
 
     hdlBlur :: (MonadReactor m)
-        => a -> Delegate (Scene p m TodoInfo) m ()
-    hdlBlur _ = delegate' $ \this@Obj{..} -> lift $ do
+        => a -> MethodT (Scene p m TodoInfo) m ()
+    hdlBlur _ = readrT' $ \this@Obj{..} -> lift $ do
         doModifyIORef' self (\me -> me
             & my._model.field @"editing" .~ False
             & my._model.field @"value" %~ J.strip)
@@ -117,8 +117,8 @@ todoInput = (W.textInput gid)
         ( MonadReactor m
         , MonadHTMLElement m
         )
-        => KeyDownKey -> Delegate (Scene p m TodoInfo) m TodoDestroy
-    hdlKeyDown (KeyDownKey _ key) = delegate'' $ \this@Obj{..} fire ->
+        => KeyDownKey -> MethodT (Scene p m TodoInfo) m TodoDestroy
+    hdlKeyDown (KeyDownKey _ key) = methodT' $ \this@Obj{..} fire ->
         case key of
             -- NB. Enter and Escape doesn't generate a onChange event
             -- So there is no adverse interation with W.input onChange
@@ -151,14 +151,14 @@ todo =
     in p & (_display %~ fdisp)
         & (_initializer %~ fini)
   where
-    fdisp disp = method' $ \s ->
+    fdisp disp s =
         let s' = s ^. _model
         in bh "div"
             [ ("className", JE.classNames
                 [ ("completed", completed s')
                 , ("editing", editing s')])
             ]
-            (runMethod' disp s)
+            (disp s)
 
     fini ini = ini >>= (injectedK hdlStartEdit')
     hdlStartEdit' a = hdlStartEdit (GadgetId "input") (obvious a) !*> zilch
@@ -166,8 +166,8 @@ todo =
     hdlStartEdit ::
         ( MonadReactor m
         , MonadHTMLElement m)
-        => GadgetId -> TodoStartEdit -> Delegate (Scene p m TodoInfo) m ()
-    hdlStartEdit i _ = delegate' $ \this@Obj{..} -> lift $ do
+        => GadgetId -> TodoStartEdit -> MethodT (Scene p m TodoInfo) m ()
+    hdlStartEdit i _ = readrT' $ \this@Obj{..} -> lift $ do
         void $ runMaybeT $ do
             me <- lift $ doReadIORef self
             -- don't allow editing of completed todos

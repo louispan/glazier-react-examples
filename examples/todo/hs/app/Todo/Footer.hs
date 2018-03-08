@@ -17,7 +17,6 @@ module Todo.Footer where
 
 import Control.Lens
 import Control.Monad.Trans.Class
-import Control.Monad.Trans.Maybe
 import Data.Generics.Product
 import qualified Data.JSString as J
 import qualified GHC.Generics as G
@@ -31,13 +30,13 @@ data TodoFooter = TodoFooter
     , currentFilter :: TD.Filter.Filter
     } deriving G.Generic
 
-hdlSetFilter :: MonadReactor m => TD.Filter.Filter -> Delegate (Scene p m TodoFooter) m ()
-hdlSetFilter fltr = delegate' $ \this@Obj{..} -> lift $ do
+hdlSetFilter :: MonadReactor m => TD.Filter.Filter -> MethodT (Scene p m TodoFooter) m ()
+hdlSetFilter fltr = readrT' $ \this@Obj{..} -> lift $ do
     doModifyIORef' self (my._model.field @"currentFilter" .~ fltr)
     dirty this
 
-hdlSetCounts :: MonadReactor m => (Int, Int) -> Delegate (Scene p m TodoFooter) m ()
-hdlSetCounts (activeCnt, completedCnt) = delegate' $ \this@Obj{..} -> lift $ do
+hdlSetCounts :: MonadReactor m => (Int, Int) -> MethodT (Scene p m TodoFooter) m ()
+hdlSetCounts (activeCnt, completedCnt) = readrT' $ \this@Obj{..} -> lift $ do
     doModifyIORef' self (\me -> me
         & my._model.field @"activeCount" .~ activeCnt
         & my._model.field @"completedCount" .~ completedCnt)
@@ -47,7 +46,6 @@ todoFooter :: MonadReactor m => Prototype p TodoFooter m (ClearCompleted)
 todoFooter = mempty
             { display = todoDisplay
             , initializer = trigger' gid "onClick" ClearCompleted
-            -- , handler = ((. obvious) <$> hdlSetFilter) `orHandler` ((. obvious) <$> hdlSetCounts)
             }
   where
     gid = GadgetId "footer"
@@ -55,7 +53,7 @@ todoFooter = mempty
 data ClearCompleted = ClearCompleted
 
 todoDisplay :: Monad m => FrameDisplay TodoFooter m ()
-todoDisplay = method' $ \s -> do
+todoDisplay s = do
     bh "footer" [("className", "footer")] $ do
         bh "span" [ ("className", "todo-count")
                     , ("key", "todo-count")] $ do
