@@ -23,11 +23,14 @@ import Data.Diverse.Profunctor
 import qualified Data.DList as DL
 import Data.Generics.Product
 import qualified Data.JSString as J
+import qualified Data.Map.Strict as M
+import Data.SKey
 import Esoteric
 import qualified GHC.Generics as G
 import Glazier.React.Event.HashChange
 import Glazier.React.Framework
 import qualified Glazier.React.Widget.Input as W
+import qualified Glazier.React.Widget.MapPile.Glam as W
 import qualified JavaScript.Extras as JE
 import qualified Todo.Filter as TD
 import qualified Todo.Footer as TD
@@ -51,10 +54,24 @@ import qualified Todo.Todo as TD
 --     | TodosAction (W.List.Action TodosKey TD.Todo.Widget)
 --     | FooterAction TD.Footer.Action
 
-data App = App
+type TodoPile f = W.GlamPile TD.Filter () (M.Map SKey) (f TD.Todo)
+
+-- | Just use map order
+todoSorter :: Applicative m => () -> Specimen m TD.Todo -> Specimen m TD.Todo -> m Ordering
+todoSorter _ _ _ = pure GT
+
+todoFilterer :: MonadReactor m => TD.Filter -> Specimen m TD.Todo -> m Bool
+todoFilterer ftr x = do
+    Frame _ x' <- doReadIORef x
+    pure $ case ftr of
+        TD.All -> True
+        TD.Active -> not $ TD.completed x'
+        TD.Completed -> TD.completed x'
+
+data App f = App
     { newtodo :: J.JSString
-    -- , todos :: Widget's t (W.List.Widget TodosKey TD.Todo.Widget)
-    , footer :: TD.TodoFooter
+    , todos :: TodoPile f
+    , footer :: TD.Footer
     } deriving G.Generic
 
 newtype NewTodo = NewTodo J.JSString
@@ -70,21 +87,20 @@ newtodoInput = (W.textInput gid)
     & _initializer %~ fi
     & _display %~ fd
   where
-    gid = GadgetId "input"
+    gid = GadgetId "newtodo"
 
     fd disp s = modifySurfaceProperties
         (`DL.snoc` ("className", "new-todo")) (disp s)
 
     fi ini = ini
-        !*> (trigger' gid "onBlur" () >>= hdlBlur)
-        !*> (trigger gid "onKeyDown" (runMaybeT . fireKeyDownKey) id
+        ^*> (trigger' gid "onBlur" () >>= hdlBlur)
+        ^*> (trigger gid "onKeyDown" (runMaybeT . fireKeyDownKey) id
             >>= maybe mempty hdlKeyDown)
 
     hdlBlur :: (MonadReactor m)
         => a -> MethodT (Scene p m J.JSString) m ()
     hdlBlur _ = readrT' $ \this@Obj{..} -> lift $ do
-        doModifyIORef' self (\me -> me
-            & my._model %~ J.strip)
+        doModifyIORef' self (my._model %~ J.strip)
         dirty this
 
     hdlKeyDown ::
@@ -101,56 +117,49 @@ newtodoInput = (W.textInput gid)
                 me <- doReadIORef self
                 let v = me ^. my._model
                     v' = J.strip v
-                doModifyIORef' self (\me' -> me'
-                    & my._model .~ J.empty)
+                doModifyIORef' self $ my._model .~ J.empty
                 if J.null v'
                     then pure ()
                     else fire $ NewTodo v'
                 dirty this
 
-            "Escape" -> do
-                blurRef gid this -- The onBlur handler will trim the value
+            "Escape" -> blurRef gid this -- The onBlur handler will trim the value
 
             _ -> pure ()
+
+-- | This is used by the React render callback
+displayApp :: FrameDisplay (App (Specimen m)) m ()
+displayApp s =
+    bh "header" [("className", "header")] $ do
+        bh "h1" [("key", "heading")] (txt "todos")
+        display newtodoInput (s ^. _model.field @"newtodo")
+
+        -- only render if there are todos
+        let ts = s ^. _model.field @"todos"._rawPile
+        if M.null ts
+            then pure ()
+            else bh "section" [ ("key", "main")
+                                    , ("className", "main")
+                                    ] $ do
+                -- Complete all checkbox
+                -- lf "input" [ ("key", "toggle-all")
+                --                 , ("className", "toggle-all")
+                --                 , ("type", "checkbox")
+                --                 , ("checked", s ^. todos . W.List.items . to (JE.toJSR . not . hasActiveTodos))
+                --                 , ("onChange", s ^. fireToggleCompleteAll . to JE.toJSR)
+                --                 ]
+                -- Render the list of todos
+                -- display ??? (s ^. _model.field @"todos")
+
+                -- Render the footer
+                display TD.todoFooter (s ^. _model.field @"footer")
+
+
 
 -- hasActiveTodos :: M.Map TodosKey (GizmoOf TD.Todo.Widget) -> Bool
 -- hasActiveTodos = getAny . foldMap (Any . isActiveTodo . outline)
 
--- isActiveTodo :: (OutlineOf TD.Todo.Widget) -> Bool
--- isActiveTodo = view (TD.Todo.completed . to not)
 
--- -- | This is used by the React render callback
--- displayApp :: G.WindowT (Scene Model Plan) ReactMl ()
--- displayApp = do
---     s <- ask
---     lift $ bh "header" [("className", "header")] $ do
---         bh "h1" [("key", "heading")] (txt "todos")
---         view G._WindowT inputWindow s
---         view G._WindowT mainWindow s
-
--- mainWindow :: ReactMlT Identity () -> G.WindowT (Scene Model Plan) ReactMl ()
--- mainWindow separator = do
---     -- only render if there are todos
---     ts <- view (todos . W.List.items)
---     if null ts
---         then pure ()
---         else do
---         s <- ask
---         lift $ bh "section" [ ("key", "main")
---                               , ("className", "main")
---                               ] $ do
---             -- Complete all checkbox
---             lf "input" [ ("key", "toggle-all")
---                          , ("className", "toggle-all")
---                          , ("type", "checkbox")
---                          , ("checked", s ^. todos . W.List.items . to (JE.toJSR . not . hasActiveTodos))
---                          , ("onChange", s ^. fireToggleCompleteAll . to JE.toJSR)
---                          ]
---             -- Render the list of todos
---             view G._WindowT (todoListWindow separator) s
-
---             -- Render the footer
---             view G._WindowT footerWindow s
 
 -- inputWindow :: G.WindowT (Scene Model Plan) ReactMl ()
 -- inputWindow = magnify (input . scene) (window W.Input.widget)

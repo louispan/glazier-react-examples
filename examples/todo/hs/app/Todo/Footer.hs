@@ -15,6 +15,7 @@
 
 module Todo.Footer where
 
+import Control.Arrow
 import Control.Lens
 import Control.Monad.Trans.Class
 import Data.Generics.Product
@@ -24,25 +25,26 @@ import Glazier.React.Framework
 import qualified JavaScript.Extras as JE
 import qualified Todo.Filter as TD
 
-data TodoFooter = TodoFooter
+data Footer = Footer
     { activeCount :: Int
     , completedCount :: Int
     , currentFilter :: TD.Filter
     } deriving G.Generic
 
-hdlSetFilter :: MonadReactor m => TD.Filter -> MethodT (Scene p m TodoFooter) m ()
+hdlSetFilter :: MonadReactor m => TD.Filter -> MethodT (Scene p m Footer) m ()
 hdlSetFilter fltr = readrT' $ \this@Obj{..} -> lift $ do
     doModifyIORef' self (my._model.field @"currentFilter" .~ fltr)
     dirty this
 
-hdlSetCounts :: MonadReactor m => (Int, Int) -> MethodT (Scene p m TodoFooter) m ()
+
+hdlSetCounts :: MonadReactor m => (Int, Int) -> MethodT (Scene p m Footer) m ()
 hdlSetCounts (activeCnt, completedCnt) = readrT' $ \this@Obj{..} -> lift $ do
-    doModifyIORef' self (\me -> me
-        & my._model.field @"activeCount" .~ activeCnt
-        & my._model.field @"completedCount" .~ completedCnt)
+    doModifyIORef' self (
+        my._model.field @"activeCount" .~ activeCnt
+        >>> my._model.field @"completedCount" .~ completedCnt)
     dirty this
 
-todoFooter :: MonadReactor m => Prototype p TodoFooter m (ClearCompleted)
+todoFooter :: MonadReactor m => Prototype p Footer m (ClearCompleted)
 todoFooter = mempty
             { display = todoDisplay
             , initializer = trigger' gid "onClick" ClearCompleted
@@ -52,7 +54,7 @@ todoFooter = mempty
 
 data ClearCompleted = ClearCompleted
 
-todoDisplay :: Monad m => FrameDisplay TodoFooter m ()
+todoDisplay :: Monad m => FrameDisplay Footer m ()
 todoDisplay s = do
     bh "footer" [("className", "footer")] $ do
         bh "span" [ ("className", "todo-count")
