@@ -4,12 +4,14 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -17,12 +19,12 @@ module Todo.Todo where
 
 import Control.Arrow
 import Control.Lens
+import Control.Lens.Misc
 import Control.Monad
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
 import Data.Diverse.Profunctor
 import qualified Data.DList as DL
-import Data.Generics.Product
 import qualified Data.JSString as J
 import Esoteric
 import qualified GHC.Generics as G
@@ -36,13 +38,15 @@ data Todo = Todo
     , editing :: Bool
     } deriving G.Generic
 
+makeLenses_ ''Todo
+
 data TodoDestroy = TodoDestroy
 data TodoStartEdit = TodoStartEdit
 
 todoToggleComplete :: (MonadReactor m) => Prototype p Todo m ()
 todoToggleComplete = W.checkboxInput (GadgetId "toggle")
     & _display %~ fd
-    & magnifyPrototype (field @"completed")
+    & magnifyPrototype _completed
  where
     fd disp s = modifySurfaceProperties
         (`DL.snoc` ("className", "toggle")) (disp s)
@@ -67,7 +71,7 @@ todoLabel = mempty
     gid = GadgetId "label"
     disp :: (MonadReactor m) => FrameDisplay Todo m ()
     disp s = bh' gid s "label" [("key", "label")] $
-                txt (s ^. _model.field @"value")
+                txt (s ^. _model._value)
 
 todoView :: (MonadReactor m) => Prototype p Todo m (Which '[TodoDestroy, TodoStartEdit])
 todoView =
@@ -87,7 +91,7 @@ todoInput ::
     )
     => Prototype p Todo m TodoDestroy
 todoInput = (W.textInput gid)
-    & magnifyPrototype (field @"value")
+    & magnifyPrototype _value
     & _initializer %~ fi
     & _display %~ fd
   where
@@ -103,15 +107,15 @@ todoInput = (W.textInput gid)
     hdlFocus :: (MonadReactor m)
         => a -> MethodT (Scene p m Todo) m ()
     hdlFocus _ = readrT' $ \this@Obj{..} -> lift $ do
-        doModifyIORef' self (my._model.field @"editing" .~ True)
+        doModifyIORef' self (my._model._editing .~ True)
         dirty this
 
     hdlBlur :: (MonadReactor m)
         => a -> MethodT (Scene p m Todo) m ()
     hdlBlur _ = readrT' $ \this@Obj{..} -> lift $ do
         doModifyIORef' self $
-            my._model.field @"editing" .~ False
-            >>> my._model.field @"value" %~ J.strip
+            my._model._editing .~ False
+            >>> my._model._value %~ J.strip
         dirty this
 
     hdlKeyDown ::
@@ -126,15 +130,15 @@ todoInput = (W.textInput gid)
             -- updating the value under our feet.
             "Enter" -> do
                 me <- doReadIORef self
-                let v = me ^. my._model.field @"value"
+                let v = me ^. my._model._value
                     v' = J.strip v
                 if J.null v'
                     then
                         fire TodoDestroy
                     else do
                         doModifyIORef' self $
-                            my._model.field @"editing" .~ False
-                            >>> my._model.field @"value" .~ v'
+                            my._model._editing .~ False
+                            >>> my._model._value .~ v'
                         dirty this
 
             "Escape" -> do
@@ -172,7 +176,7 @@ todo =
         void $ runMaybeT $ do
             me <- lift $ doReadIORef self
             -- don't allow editing of completed todos
-            let b = me ^. my._model.field @"completed"
+            let b = me ^. my._model._completed
             guard (not b)
-            lift $ doModifyIORef' self $ my._model.field @"editing" .~ True
+            lift $ doModifyIORef' self $ my._model._editing .~ True
             lift $ focusRef i this

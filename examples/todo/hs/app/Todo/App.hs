@@ -4,26 +4,30 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Todo.App where
 
 import Control.Lens
+import Control.Lens.Misc
 import Control.Monad
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
 import Data.Diverse.Profunctor
 import qualified Data.DList as DL
-import Data.Generics.Product
 import qualified Data.JSString as J
 import qualified Data.Map.Strict as M
+import Data.Monoid
+import Data.Semigroup.Applicative
 import Data.SKey
 import Esoteric
 import qualified GHC.Generics as G
@@ -54,7 +58,7 @@ import qualified Todo.Todo as TD
 --     | TodosAction (W.List.Action TodosKey TD.Todo.Widget)
 --     | FooterAction TD.Footer.Action
 
-type TodoPile f = W.GlamPile TD.Filter () (M.Map SKey) (f TD.Todo)
+type TodoPile (mt :: Model (* -> *)) = W.GlamPile TD.Filter () (M.Map SKey) (ModelType mt TD.Todo)
 
 -- | Just use map order
 todoSorter :: Applicative m => () -> Specimen m TD.Todo -> Specimen m TD.Todo -> m Ordering
@@ -68,26 +72,39 @@ todoFilterer ftr x = do
         TD.Active -> not $ TD.completed x'
         TD.Completed -> TD.completed x'
 
-data App f = App
-    { newtodo :: J.JSString
-    , todos :: TodoPile f
+data App (mt :: Model (* -> *)) = App
+    { newTodo :: J.JSString
+    , todos :: TodoPile mt
     , footer :: TD.Footer
     } deriving G.Generic
 
+makeLenses_ ''App
+
+-- _newTodo :: Lens' (App mt) J.JSString
+-- _newTodo = field @"newTodo"
+
+-- -- | Can't use generic lens because of 'mt'
+-- _todos :: Lens' (App mt) (TodoPile mt)
+-- _todos = lens todos (\s a -> s { todos = a})
+
+-- _footer :: Lens' (App mt) TD.Footer
+-- _footer = field @"footer"
+
+
 newtype NewTodo = NewTodo J.JSString
 
-newtodoInput ::
+newTodoInput ::
     ( MonadReactor m
     , MonadJS m
     , MonadHTMLElement m
     )
     => Prototype p J.JSString m NewTodo
-newtodoInput = (W.textInput gid)
-    -- & magnifyPrototype (field @"newtodo")
+newTodoInput = (W.textInput gid)
+    -- & magnifyPrototype (field @"newTodo")
     & _initializer %~ fi
     & _display %~ fd
   where
-    gid = GadgetId "newtodo"
+    gid = GadgetId "newTodo"
 
     fd disp s = modifySurfaceProperties
         (`DL.snoc` ("className", "new-todo")) (disp s)
@@ -127,20 +144,72 @@ newtodoInput = (W.textInput gid)
 
             _ -> pure ()
 
+newTodoInput' ::
+    ( MonadReactor m
+    , MonadJS m
+    , MonadHTMLElement m
+    )
+    => Prototype p (App ('Spec m)) m NewTodo
+newTodoInput' = magnifyPrototype _newTodo newTodoInput
+
+toggleAll :: MonadReactor m => Prototype p (App ('Spec m)) m ()
+toggleAll = mempty
+    { display = \s -> do
+        ps' <- lift $ ps s
+        lf' gid s "input" (DL.fromList ps')
+    -- , initializer = withRef gid
+    --     ^*> (trigger' gid "onChange" () >>= hdlChange)
+    }
+
+  where
+    ps s = traverse sequenceA
+        [ ("key", pure . JE.toJSR . reactKey $ s ^. _plan)
+        , ("type", pure $ "checkbox")
+        , ("checked", JE.toJSR <$> (hasActiveTodos (s ^. _model._todos.W._rawPile)))
+        ]
+
+    gid = GadgetId "toggle-all"
+
+    hasActiveTodos :: MonadReactor m => M.Map k (Specimen m TD.Todo) -> m Bool
+    hasActiveTodos = fmap getAny . getAp . foldMap go
+      where
+        go td = Ap $ do
+            td' <- doReadIORef td
+            pure $ Any $ td' ^. _model.TD._completed
+
+    -- hdlChange :: (MonadReactor m)
+    --     => a -> MethodT (Scene p m (App ('Spec m))) m ()
+    -- hdlChange _ = readrT' $ \this@Obj{..} -> do
+    --     lift $ do
+    --         doModifyIORef' self (my._model %~ not)
+    --         dirty this
+
+--         ToggleCompleteAllAction -> do
+--             s <- use (todos . W.List.items)
+--             let b = hasActiveTodos s
+--             let acts = M.foldMapWithKey (toggleCompleteAll b) s
+--             pure $ D.singleton $ SendTodosActionsCommand $ D.toList $ acts `D.snoc` W.List.RenderAction
+
+
 -- | This is used by the React render callback
-displayApp :: FrameDisplay (App (Specimen m)) m ()
-displayApp s =
+displayApp ::
+    ( MonadReactor m
+    , MonadJS m
+    , MonadHTMLElement m
+    )
+    => FrameDisplay (App ('Spec m)) m ()
+displayApp s = do
     bh "header" [("className", "header")] $ do
         bh "h1" [("key", "heading")] (txt "todos")
-        display newtodoInput (s ^. _model.field @"newtodo")
+        display newTodoInput' s
 
         -- only render if there are todos
-        let ts = s ^. _model.field @"todos"._rawPile
-        if M.null ts
-            then pure ()
-            else bh "section" [ ("key", "main")
-                                    , ("className", "main")
-                                    ] $ do
+        -- let ts = s ^. _model.field @"todos"._rawPile
+        -- if M.null ts
+        --     then pure ()
+        --     else bh "section" [ ("key", "main")
+        --                             , ("className", "main")
+        --                             ] $ do
                 -- Complete all checkbox
                 -- lf "input" [ ("key", "toggle-all")
                 --                 , ("className", "toggle-all")
@@ -152,12 +221,9 @@ displayApp s =
                 -- display ??? (s ^. _model.field @"todos")
 
                 -- Render the footer
-                display TD.todoFooter (s ^. _model.field @"footer")
+                -- display TD.todoFooter (s ^. _model.field @"footer")
 
 
-
--- hasActiveTodos :: M.Map TodosKey (GizmoOf TD.Todo.Widget) -> Bool
--- hasActiveTodos = getAny . foldMap (Any . isActiveTodo . outline)
 
 
 

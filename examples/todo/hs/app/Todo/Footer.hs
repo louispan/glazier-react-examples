@@ -4,12 +4,14 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -17,8 +19,8 @@ module Todo.Footer where
 
 import Control.Arrow
 import Control.Lens
+import Control.Lens.Misc
 import Control.Monad.Trans.Class
-import Data.Generics.Product
 import qualified Data.JSString as J
 import qualified GHC.Generics as G
 import Glazier.React.Framework
@@ -31,17 +33,19 @@ data Footer = Footer
     , currentFilter :: TD.Filter
     } deriving G.Generic
 
+makeLenses_ ''Footer
+
 hdlSetFilter :: MonadReactor m => TD.Filter -> MethodT (Scene p m Footer) m ()
 hdlSetFilter fltr = readrT' $ \this@Obj{..} -> lift $ do
-    doModifyIORef' self (my._model.field @"currentFilter" .~ fltr)
+    doModifyIORef' self (my._model._currentFilter .~ fltr)
     dirty this
 
 
 hdlSetCounts :: MonadReactor m => (Int, Int) -> MethodT (Scene p m Footer) m ()
 hdlSetCounts (activeCnt, completedCnt) = readrT' $ \this@Obj{..} -> lift $ do
     doModifyIORef' self (
-        my._model.field @"activeCount" .~ activeCnt
-        >>> my._model.field @"completedCount" .~ completedCnt)
+        my._model._activeCount .~ activeCnt
+        >>> my._model._completedCount .~ completedCnt)
     dirty this
 
 todoFooter :: MonadReactor m => Prototype p Footer m (ClearCompleted)
@@ -55,12 +59,12 @@ todoFooter = mempty
 data ClearCompleted = ClearCompleted
 
 todoDisplay :: Monad m => FrameDisplay Footer m ()
-todoDisplay s = do
+todoDisplay s =
     bh "footer" [("className", "footer")] $ do
         bh "span" [ ("className", "todo-count")
                     , ("key", "todo-count")] $ do
             bh "strong" [("key", "items")]
-                (s ^. _model.field @"activeCount" . to show . to J.pack . to txt)
+                (s ^. _model._activeCount . to show . to J.pack . to txt)
             txt " items left"
         bh "ul" [("className", "filters")
                   , ("key", "filters")] $ do
@@ -69,7 +73,7 @@ todoDisplay s = do
                          , ("key", "all")
                          , ("className", JE.classNames
                             [("selected"
-                            , s ^. _model.field @"currentFilter" == TD.All)])
+                            , s ^. _model._currentFilter == TD.All)])
                          ] $
                 txt "All"
             txt " "
@@ -79,7 +83,7 @@ todoDisplay s = do
                 , ("key", "active")
                 , ("className", JE.classNames
                     [("selected"
-                    , s ^. _model.field @"currentFilter" == TD.Active)])
+                    , s ^. _model._currentFilter == TD.Active)])
                 ] $
                 txt "Active"
             txt " "
@@ -89,10 +93,10 @@ todoDisplay s = do
                     , ("key", "completed")
                     , ("className", JE.classNames
                         [("selected"
-                        , s ^. _model.field @"currentFilter" == TD.Completed)])
+                        , s ^. _model._currentFilter == TD.Completed)])
                     ] $
                     txt "Completed"
-        if (s ^. _model.field @"completedCount" > 0)
+        if (s ^. _model._completedCount > 0)
            then bh' gid s "button"
                     [("key", "clear-completed"), ("className", "clear-completed")] $
                             -- , ("onClick", s ^. fireClearCompleted . to JE.toJSR)] $

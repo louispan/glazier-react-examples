@@ -32,7 +32,6 @@ executable glazier-react-todo
                      , disposable >= 0.3.0.0
                      , dlist >= 0.8
                      , esoteric-extras >= 0.0.1.0
-                     , generic-lens >= 0.5.1.0
                      , glazier-react >= 0.7
                      , glazier-react-widget >= 0.7
                      , javascript-extras >= 0.4.0.0
@@ -44,6 +43,7 @@ executable glazier-react-todo
                      , pipes >= 4
                      , pipes-concurrency >= 2
                      , pipes-misc >= 0.3.1
+                     , reducers >= 3.12.1
                      , stm >= 2.4
                      , tagged >= 0.8.5
                      , text >= 1.2
