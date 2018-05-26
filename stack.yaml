@@ -39,8 +39,8 @@ packages:
 - '.'
 - location: '/Users/louis/repo/hs/alternators'
   extra-dep: true
-- location: '/Users/louis/repo/hs/arrow-extras'
-  extra-dep: true
+# - location: '/Users/louis/repo/hs/arrow-extras'
+#   extra-dep: true
 - location: '/Users/louis/repo/hs/glazier'
   extra-dep: true
 - location: '/Users/louis/repo/js/glazier-react'
@@ -53,12 +53,8 @@ packages:
   extra-dep: true
 - location: '/Users/louis/repo/hs/lens-misc'
   extra-dep: true
-- location: '/Users/louis/repo/hs/data-diverse'
-  extra-dep: true
-- location: '/Users/louis/repo/hs/data-diverse-lens'
-  extra-dep: true
-- location: '/Users/louis/repo/hs/esoteric-extras'
-  extra-dep: true
+# - location: '/Users/louis/repo/hs/esoteric-extras'
+#   extra-dep: true
 # - location: '/Users/louis/repo/hs/parameterized'
 #   extra-dep: true
 # - location: '/Users/louis/repo/hs/alternators'
@@ -71,11 +67,14 @@ extra-deps:
 # - glazier-react-widget-0.7.0.0
 - parameterized-0.5.0.0
 - ghcjs-base-stub-0.1.0.4
-- generic-lens-0.5.1.0
+- data-diverse-4.0.0.0
+- data-diverse-lens-4.1.0.0
+- data-has-0.3.0.0
 - monadlist-0.0.2
-- pipes-misc-0.4.0.1
+- unliftio-0.2.7.0
+- unliftio-core-0.1.1.0
 - newtype-generics-0.5.2.1
-- pipes-category-0.3.0.0
+- async-2.2.1
 
 # Override default flag values for local packages and extra-deps
 flags: {}

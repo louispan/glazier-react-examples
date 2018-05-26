@@ -51,10 +51,10 @@ hdlSetCounts (activeCnt, completedCnt) = readrT' $ \this@Obj{..} -> lift $ do
 todoFooter :: MonadReactor m => Prototype p Footer m (ClearCompleted)
 todoFooter = mempty
             { display = todoDisplay
-            , initializer = trigger' gid "onClick" ClearCompleted
+            , initializer = trigger' eid "onClick" ClearCompleted
             }
   where
-    gid = GadgetId "footer"
+    eid = GadgetId "footer"
 
 data ClearCompleted = ClearCompleted
 
@@ -97,10 +97,10 @@ todoDisplay s =
                     ] $
                     txt "Completed"
         if (s ^. _model._completedCount > 0)
-           then bh' gid s "button"
+           then bh' eid s "button"
                     [("key", "clear-completed"), ("className", "clear-completed")] $
                             -- , ("onClick", s ^. fireClearCompleted . to JE.toJSR)] $
                     txt "Clear completed"
            else mempty
   where
-    gid = GadgetId "footer"
+    eid = GadgetId "footer"

@@ -43,7 +43,7 @@ import qualified Todo.Todo as TD
 -- type TodosKey = Int
 
 -- data Command
---     = RenderCommand (Gizmo Model Plan) [JE.Property] J.JSVal
+--     = RenderCommand (Element Model Plan) [JE.Property] J.JSVal
 --     | SendTodosActionsCommand [W.List.Action TodosKey TD.Todo.Widget]
 --     | SendFooterActionCommand TD.Footer.Action
 --     | InputCommand G.Property.Command
@@ -58,7 +58,7 @@ import qualified Todo.Todo as TD
 --     | TodosAction (W.List.Action TodosKey TD.Todo.Widget)
 --     | FooterAction TD.Footer.Action
 
-type TodoPile (mt :: Model (* -> *)) = W.GlamPile TD.Filter () (M.Map SKey) (ModelType mt TD.Todo)
+type TodoPile (mt :: Model (* -> *)) = W.DynamicCollection TD.Filter () (M.Map SKey) (ModelType mt TD.Todo)
 
 -- | Just use map order
 todoSorter :: Applicative m => () -> Specimen m TD.Todo -> Specimen m TD.Todo -> m Ordering
@@ -99,19 +99,19 @@ newTodoInput ::
     , MonadHTMLElement m
     )
     => Prototype p J.JSString m NewTodo
-newTodoInput = (W.textInput gid)
+newTodoInput = (W.textInput eid)
     -- & magnifyPrototype (field @"newTodo")
     & _initializer %~ fi
     & _display %~ fd
   where
-    gid = GadgetId "newTodo"
+    eid = GadgetId "newTodo"
 
     fd disp s = modifySurfaceProperties
         (`DL.snoc` ("className", "new-todo")) (disp s)
 
     fi ini = ini
-        ^*> (trigger' gid "onBlur" () >>= hdlBlur)
-        ^*> (trigger gid "onKeyDown" (runMaybeT . fireKeyDownKey) id
+        ^*> (trigger' eid "onBlur" () >>= hdlBlur)
+        ^*> (trigger eid "onKeyDown" (runMaybeT . fireKeyDownKey) id
             >>= maybe mempty hdlKeyDown)
 
     hdlBlur :: (MonadReactor m)
@@ -140,7 +140,7 @@ newTodoInput = (W.textInput gid)
                     else fire $ NewTodo v'
                 dirty this
 
-            "Escape" -> blurRef gid this -- The onBlur handler will trim the value
+            "Escape" -> blurRef eid this -- The onBlur handler will trim the value
 
             _ -> pure ()
 
@@ -156,9 +156,9 @@ toggleAll :: MonadReactor m => Prototype p (App ('Spec m)) m ()
 toggleAll = mempty
     { display = \s -> do
         ps' <- lift $ ps s
-        lf' gid s "input" (DL.fromList ps')
-    -- , initializer = withRef gid
-    --     ^*> (trigger' gid "onChange" () >>= hdlChange)
+        lf' eid s "input" (DL.fromList ps')
+    -- , initializer = withRef eid
+    --     ^*> (trigger' eid "onChange" () >>= hdlChange)
     }
 
   where
@@ -168,7 +168,7 @@ toggleAll = mempty
         , ("checked", JE.toJSR <$> (hasActiveTodos (s ^. _model._todos.W._rawPile)))
         ]
 
-    gid = GadgetId "toggle-all"
+    eid = GadgetId "toggle-all"
 
     hasActiveTodos :: MonadReactor m => M.Map k (Specimen m TD.Todo) -> m Bool
     hasActiveTodos = fmap getAny . getAp . foldMap go
@@ -236,13 +236,13 @@ displayApp s = do
 -- footerWindow :: G.WindowT (Scene Model Plan) ReactMl ()
 -- footerWindow = magnify (footer . scene) (window TD.Footer.widget)
 
--- updateFooterGadget :: G.Gadget Action (Gizmo Model Plan) (D.DList Command)
+-- updateFooterGadget :: G.Gadget Action (Element Model Plan) (D.DList Command)
 -- updateFooterGadget = do
 --     (active, completed) <- use (todos . W.List.items . to (M.partition (isActiveTodo . outline)))
 --     pure $ D.singleton $ SendFooterActionCommand
 --                 (TD.Footer.SetCountsAction (length active) (length completed))
 
--- gadget :: ReactMlT Identity () -> G.Gadget Action (Gizmo Model Plan) (D.DList Command)
+-- gadget :: ReactMlT Identity () -> G.Gadget Action (Element Model Plan) (D.DList Command)
 -- gadget separator = do
 --     a <- ask
 --     case a of
@@ -335,25 +335,25 @@ displayApp s = do
 --     toggleCompleteAll
 --         :: Bool
 --         -> TodosKey
---         -> GizmoOf TD.Todo.Widget
+--         -> ElementOf TD.Todo.Widget
 --         -> D.DList (W.List.Action TodosKey TD.Todo.Widget)
---     toggleCompleteAll b k todoGizmo =
---         if todoGizmo ^. (TD.Todo.schema . TD.Todo.completed) /= b
+--     toggleCompleteAll b k todoElement =
+--         if todoElement ^. (TD.Todo.schema . TD.Todo.completed) /= b
 --             then D.singleton $ W.List.ItemAction k (TD.Todo.SetCompletedAction b)
 --             else mempty
 
--- inputGadget :: G.Gadget Action (Gizmo Model Plan) (D.DList Command)
+-- inputGadget :: G.Gadget Action (Element Model Plan) (D.DList Command)
 -- inputGadget = fmap InputCommand <$> magnify _InputAction (zoom input (W.Input.resetGadget go))
 --   where
 --     go ( W.Input.SubmitAction j _) = Just j
 --     go ( W.Input.CancelAction j) = Just j
 --     go _ = Nothing
 
--- todosGadget :: ReactMl () -> G.Gadget Action (Gizmo Model Plan) (D.DList Command)
+-- todosGadget :: ReactMl () -> G.Gadget Action (Element Model Plan) (D.DList Command)
 -- todosGadget separator = fmap TodosCommand <$> magnify _TodosAction (zoom todos
 --                                                          (gadget (W.List.widget separator TD.Todo.widget)))
 
--- footerGadget :: G.Gadget Action (Gizmo Model Plan) (D.DList Command)
+-- footerGadget :: G.Gadget Action (Element Model Plan) (D.DList Command)
 -- footerGadget = fmap FooterCommand <$> magnify _FooterAction (zoom footer (gadget TD.Footer.widget))
 
 

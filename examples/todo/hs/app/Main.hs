@@ -72,7 +72,7 @@ main = do
 
     let appWidget = TD.App.widget mempty
     -- App Model
-    s <- iterM (Maker.run muid component output) (mkGizmo' appWidget appOutline)
+    s <- iterM (Maker.run muid component output) (mkElement' appWidget appOutline)
 
     -- Start the App render
     root <- js_getElementById "root"
@@ -105,12 +105,12 @@ main = do
 appEffect
     :: MonadIO io
     => GadgetOf TD.App.Widget
-    -> GizmoOf TD.App.Widget
+    -> ElementOf TD.App.Widget
     -> MVar Int
     -> ReactComponent
     -> PC.Output TD.App.Action
     -> PC.Input TD.App.Action
-    -> P.Effect io (GizmoOf TD.App.Widget)
+    -> P.Effect io (ElementOf TD.App.Widget)
 appEffect appGadget s muid component output input =
     PL.execStateP s $
         appProducerIO appGadget input P.>->
@@ -121,20 +121,20 @@ appProducerIO
     :: MonadIO io
     => GadgetOf TD.App.Widget
     -> PC.Input TD.App.Action
-    -> P.Producer' (D.DList TD.App.Command) (StateT (GizmoOf TD.App.Widget) io) ()
+    -> P.Producer' (D.DList TD.App.Command) (StateT (ElementOf TD.App.Widget) io) ()
 appProducerIO appGadget input = hoist (hoist (liftIO . atomically)) (appProducer appGadget input)
 
 appProducer
     :: GadgetOf TD.App.Widget
     -> PC.Input TD.App.Action
-    -> P.Producer' (D.DList TD.App.Command) (StateT (GizmoOf TD.App.Widget) STM) ()
+    -> P.Producer' (D.DList TD.App.Command) (StateT (ElementOf TD.App.Widget) STM) ()
 appProducer appGadget input = PM.execInput input go'
   where
     go = (runMaybeT .) . runReaderT . G.runGadgetT $ hoist generalize appGadget
     go' = fmap (fromMaybe mempty) <$> go
 
 runCommandsPipe
-    :: (MonadState (GizmoOf TD.App.Widget) io, MonadIO io)
+    :: (MonadState (ElementOf TD.App.Widget) io, MonadIO io)
     => MVar Int
     -> ReactComponent
     -> PC.Output TD.App.Action
@@ -142,7 +142,7 @@ runCommandsPipe
 runCommandsPipe muid component output = PP.mapM (runCommands muid component output)
 
 runCommands
-    :: (Foldable t, MonadState (GizmoOf TD.App.Widget) io, MonadIO io)
+    :: (Foldable t, MonadState (ElementOf TD.App.Widget) io, MonadIO io)
     => MVar Int
     -> ReactComponent
     -> PC.Output TD.App.Action
