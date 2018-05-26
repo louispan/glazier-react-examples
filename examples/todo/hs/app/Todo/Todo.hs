@@ -69,19 +69,20 @@ todoLabel = do
         , gadget = constTrigger eid _always "onDoubleClick" TodoStartEdit
         }
 
--- todoView :: (MkId m, AsReactor cmd) => m (Widget cmd p Todo (Which '[TodoDestroy, TodoStartEdit]))
+-- todoView :: (MkId m, AsReactor cmd)
+--     => m (Widget cmd p Todo (Which '[(), TodoDestroy, TodoStartEdit]))
 -- todoView = do
 --     x <- todoToggleComplete
 --     y <- todoDestroy
 --     z <- todoLabel
---     let p = todoToggleComplete
---             *> (pickOnly <$> todoDestroy)
---             `also` (pickOnly <$> todoLabel)
---         disp = display p
---     in p { display = \s -> bh "div"
---                 [ ("key", "view")
---                 , ("className", "view")]
---                 (disp s) }
+--     let wid = (pickOnly <$> x)
+--             `also` (pickOnly <$> y)
+--             `also` (pickOnly <$> z)
+--     pure wid
+--     -- pure $ wid & _window %~ \win -> bh "div"
+--     --             [ ("key", "view")
+--     --             , ("className", "view")]
+--     --             win
 
 -- todoInput ::
 --     ( MonadReactor m
