@@ -93,21 +93,23 @@ todoInput eid =
   where
     f = modifySurfaceProperties (`DL.snoc` ("className", "edit"))
     g gad = (finish gad)
-        <> (finish $ trigger_ eid _always "onFocus" () *> hdlFocus)
-        <> (finish $ trigger_ eid _always "onBlur" () *> hdlBlur)
-        <> (trigger' eid _always "onKeyDown" fireKeyDownKey
-            >>= hdlKeyDown)
+        <> (finish $ hdlFocus)
+        <> (finish $ hdlBlur)
+        <> hdlKeyDown
 
     hdlFocus :: AsReactor cmd => Gadget cmd p Todo ()
-    hdlFocus = tickScene (_model._editing .= True)
+    hdlFocus = trigger_ eid _always "onFocus" () *> tickScene (_model._editing .= True)
 
     hdlBlur :: AsReactor cmd => Gadget cmd p Todo ()
-    hdlBlur = tickScene $ do
-        _model._editing .= False
-        _model._value %= J.strip
+    hdlBlur = do
+        trigger_ eid _always "onBlur" ()
+        tickScene $ do
+            _model._editing .= False
+            _model._value %= J.strip
 
-    hdlKeyDown :: (AsReactor cmd, AsHTMLElement cmd) => KeyDownKey -> Gadget cmd p Todo TodoDestroy
-    hdlKeyDown (KeyDownKey _ key) =
+    hdlKeyDown :: (AsReactor cmd, AsHTMLElement cmd) => Gadget cmd p Todo TodoDestroy
+    hdlKeyDown = do
+        (KeyDownKey _ key) <- trigger' eid _always "onKeyDown" fireKeyDownKey
         case key of
             -- NB. Enter and Escape doesn't generate a onChange event
             -- So there is no adverse interation with W.input onChange

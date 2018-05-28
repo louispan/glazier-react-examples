@@ -132,7 +132,8 @@ toggleAll eid = blank
         scn <- ask
         ps' <- lift $ ps scn
         lf' eid "input" (DL.fromList ps')
-    , gadget = pure ()
+    -- , gadget = hdlElementalRef eid
+    --     <> hdlChange
     -- , initializer = withRef eid
     --     ^*> (trigger' eid "onChange" () >>= hdlChange)
     }
@@ -153,6 +154,9 @@ toggleAll eid = blank
         go sbj = Ap $ do
             scn <- doReadIORef $ sceneRef sbj
             pure $ Any $ scn ^. _model.TD._completed
+
+    hdlChange :: (AsReactor cmd, AsJavascript cmd) => Gadget cmd p TodoCollection ()
+    hdlChange = tickScene $ _model %~ not
 
     -- hdlChange :: (MonadReactor m)
     --     => a -> MethodT (Scene p m (App ('Spec m))) m ()
