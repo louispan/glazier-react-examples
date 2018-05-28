@@ -1,32 +1,35 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Todo.Todo where
+module Todo.Todo
+    ( Todo(..)
+    , _value
+    , _completed
+    , _editing
+    , TodoDestroy
+    , mkTodo
+    ) where
 
 import Control.Lens
 import Control.Lens.Misc
 import Control.Monad
-import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
 import Data.Diverse.Profunctor
 import qualified Data.DList as DL
 import qualified Data.JSString as J
+import Data.Maybe
+import Data.Semigroup
 import qualified GHC.Generics as G
 import Glazier.React
+import Glazier.React.Action.KeyDownKey
+import Glazier.React.Effect.HTMLElement
+import Glazier.React.Effect.JavaScript
 import qualified Glazier.React.Widgets.Input as W
 import qualified JavaScript.Extras as JE
 
@@ -34,149 +37,123 @@ data Todo = Todo
     { value :: J.JSString
     , completed :: Bool
     , editing :: Bool
-    } deriving G.Generic
+    } deriving (Show, Eq, Ord, G.Generic)
 
 makeLenses_ ''Todo
 
 data TodoDestroy = TodoDestroy
+data TodoComplete = TodoComplete
 data TodoStartEdit = TodoStartEdit
 
-todoToggleComplete :: (MkId m, AsReactor cmd) => m (Widget cmd p Todo ())
-todoToggleComplete = do
-    eid <- mkElementalId "toggle"
-    pure $ W.checkboxInput eid
+todoToggleComplete :: (AsReactor cmd) => ElementalId -> Widget cmd p Todo TodoComplete
+todoToggleComplete eid =
+    W.checkboxInput eid
         & _window %~ modifySurfaceProperties (`DL.snoc` ("className", "toggle"))
+        & _gadget %~ (fmap $ const TodoComplete)
         & enlargeModel _completed
 
-todoDestroy :: (MkId m, AsReactor cmd) => m (Widget cmd p s TodoDestroy)
-todoDestroy = do
-    eid <- mkElementalId "destroy"
-    pure $ Widget
-        { window = lf' eid "button"
-                [ ("key", "destroy")
-                , ("className", "destroy")]
-        , gadget = constTrigger eid _always "onClick" TodoDestroy
-        }
+todoDestroy :: (AsReactor cmd) => ElementalId -> Widget cmd p s TodoDestroy
+todoDestroy eid =
+    blank
+    { window = lf' eid "button"
+            [ ("key", "destroy")
+            , ("className", "destroy")]
+    , gadget = trigger_ eid _always "onClick" TodoDestroy
+    }
 
-todoLabel :: (MkId m, AsReactor cmd) => m (Widget cmd p Todo TodoStartEdit)
-todoLabel = do
-    eid <- mkElementalId "label"
-    pure $ Widget
-        { window = do
-            str <- view (_model._value)
-            bh' eid "label" [("key", "label")] $
-                txt str
-        , gadget = constTrigger eid _always "onDoubleClick" TodoStartEdit
-        }
+todoLabel :: (AsReactor cmd) => ElementalId -> Widget cmd p Todo TodoStartEdit
+todoLabel eid =
+    blank
+    { window = do
+        str <- view (_model._value)
+        bh' eid "label" [("key", "label")] $
+            txt str
+    , gadget = trigger_ eid _always "onDoubleClick" TodoStartEdit
+    }
 
--- todoView :: (MkId m, AsReactor cmd)
---     => m (Widget cmd p Todo (Which '[(), TodoDestroy, TodoStartEdit]))
--- todoView = do
---     x <- todoToggleComplete
---     y <- todoDestroy
---     z <- todoLabel
---     let wid = (pickOnly <$> x)
---             `also` (pickOnly <$> y)
---             `also` (pickOnly <$> z)
---     pure wid
---     -- pure $ wid & _window %~ \win -> bh "div"
---     --             [ ("key", "view")
---     --             , ("className", "view")]
---     --             win
+mkTodoView :: (MkId m, AsReactor cmd) => m (Widget cmd p Todo (Which '[TodoComplete, TodoDestroy, TodoStartEdit]))
+mkTodoView = do
+    todoToggleComplete' <- todoToggleComplete <$> mkElementalId "toggle"
+    todoDestroy' <- todoDestroy <$> mkElementalId "destroy"
+    todoLabel' <- todoLabel <$> mkElementalId "label"
+    let wid = (pickOnly <$> todoToggleComplete')
+            `also` (pickOnly <$> todoDestroy')
+            `also` (pickOnly <$> todoLabel')
+    pure $ wid & _window %~ \win -> bh "div"
+                [ ("key", "view")
+                , ("className", "view")]
+                win
 
--- todoInput ::
---     ( MonadReactor m
---     , MonadJS m
---     , MonadHTMLElement m
---     )
---     => Prototype p Todo m TodoDestroy
--- todoInput = (W.textInput eid)
---     & magnifyPrototype _value
---     & _initializer %~ fi
---     & _display %~ fd
---   where
---     eid = GadgetId "input"
---     fd disp s = modifySurfaceProperties
---         (`DL.snoc` ("className", "edit")) (disp s)
---     fi ini = ini
---         ^*> (trigger' eid "onFocus" () >>= hdlFocus)
---         ^*> (trigger' eid "onBlur" () >>= hdlBlur)
---         ^*> (trigger eid "onKeyDown" (runMaybeT . fireKeyDownKey) id
---             >>= maybe mempty hdlKeyDown)
+todoInput :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd) => ElementalId -> Widget cmd p Todo TodoDestroy
+todoInput eid =
+    W.textInput eid
+        & enlargeModel _value
+        & _window %~ f
+        & _gadget %~ g
+  where
+    f = modifySurfaceProperties (`DL.snoc` ("className", "edit"))
+    g gad = (finish gad)
+        <> (finish $ trigger_ eid _always "onFocus" () *> hdlFocus)
+        <> (finish $ trigger_ eid _always "onBlur" () *> hdlBlur)
+        <> (trigger' eid _always "onKeyDown" fireKeyDownKey
+            >>= hdlKeyDown)
 
---     hdlFocus :: (MonadReactor m)
---         => a -> MethodT (Scene p m Todo) m ()
---     hdlFocus _ = readrT' $ \this@Obj{..} -> lift $ do
---         doModifyIORef' self (my._model._editing .~ True)
---         dirty this
+    hdlFocus :: AsReactor cmd => Gadget cmd p Todo ()
+    hdlFocus = tickScene (_model._editing .= True)
 
---     hdlBlur :: (MonadReactor m)
---         => a -> MethodT (Scene p m Todo) m ()
---     hdlBlur _ = readrT' $ \this@Obj{..} -> lift $ do
---         doModifyIORef' self $
---             my._model._editing .~ False
---             >>> my._model._value %~ J.strip
---         dirty this
+    hdlBlur :: AsReactor cmd => Gadget cmd p Todo ()
+    hdlBlur = tickScene $ do
+        _model._editing .= False
+        _model._value %= J.strip
 
---     hdlKeyDown ::
---         ( MonadReactor m
---         , MonadHTMLElement m
---         )
---         => KeyDownKey -> MethodT (Scene p m Todo) m TodoDestroy
---     hdlKeyDown (KeyDownKey _ key) = methodT' $ \this@Obj{..} fire ->
---         case key of
---             -- NB. Enter and Escape doesn't generate a onChange event
---             -- So there is no adverse interation with W.input onChange
---             -- updating the value under our feet.
---             "Enter" -> do
---                 me <- doReadIORef self
---                 let v = me ^. my._model._value
---                     v' = J.strip v
---                 if J.null v'
---                     then
---                         fire TodoDestroy
---                     else do
---                         doModifyIORef' self $
---                             my._model._editing .~ False
---                             >>> my._model._value .~ v'
---                         dirty this
+    hdlKeyDown :: (AsReactor cmd, AsHTMLElement cmd) => KeyDownKey -> Gadget cmd p Todo TodoDestroy
+    hdlKeyDown (KeyDownKey _ key) =
+        case key of
+            -- NB. Enter and Escape doesn't generate a onChange event
+            -- So there is no adverse interation with W.input onChange
+            -- updating the value under our feet.
+            "Enter" -> tickSceneThen $ do
+                v <- use (_model._value)
+                let v' = J.strip v
+                if J.null v'
+                    then
+                        pure $ pure TodoDestroy
+                    else do
+                        _model._editing .= False
+                        _model._value .= v'
+                        pure $ finish $ pure ()
 
---             "Escape" -> do
---                 blurRef eid this -- The onBlur handler will trim the value
+            "Escape" -> finish $ blurElement eid -- The onBlur handler will trim the value
 
---             _ -> pure ()
+            _ -> finish $ pure ()
 
--- todo ::
---     ( MonadReactor m
---     , MonadJS m
---     , MonadHTMLElement m
---     ) => Prototype p Todo m (Which '[TodoDestroy])
--- todo =
---     let p = todoView `also` (pickOnly <$> todoInput)
---     in p & (_display %~ fd)
---         & (_initializer %~ fi)
---   where
---     fd disp s =
---         let s' = s ^. _model
---         in bh "div"
---             [ ("className", JE.classNames
---                 [ ("completed", completed s')
---                 , ("editing", editing s')])
---             ]
---             (disp s)
+mkTodo :: (MkId m, AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+    => m (Widget cmd p Todo (Which '[TodoComplete, TodoDestroy]))
+mkTodo = do
+    todoView' <- mkTodoView
+    eid <- mkElementalId "input"
+    let todoInput' = todoInput eid
+    let w = todoView' `also` (pickOnly <$> todoInput')
+    pure $ w
+        & (_window %~ f)
+        & (_gadget %~ g eid)
+  where
+    f win = do
+        s <- view _model
+        bh "div"
+            [ ("className", JE.classNames
+                [ ("completed", completed s)
+                , ("editing", editing s)])
+            ]
+            win
+    g eid gad = gad >>= hdlStartEdit' eid
+    hdlStartEdit' eid = injectedK $ finished . hdlStartEdit eid . obvious
 
---     fi ini = ini >>= (injectedK hdlStartEdit')
---     hdlStartEdit' a = hdlStartEdit (GadgetId "input") (obvious a) ^*> zilch
-
---     hdlStartEdit ::
---         ( MonadReactor m
---         , MonadHTMLElement m)
---         => GadgetId -> TodoStartEdit -> MethodT (Scene p m Todo) m ()
---     hdlStartEdit i _ = readrT' $ \this@Obj{..} -> lift $ do
---         void $ runMaybeT $ do
---             me <- lift $ doReadIORef self
---             -- don't allow editing of completed todos
---             let b = me ^. my._model._completed
---             guard (not b)
---             lift $ doModifyIORef' self $ my._model._editing .~ True
---             lift $ focusRef i this
+    hdlStartEdit :: (AsHTMLElement cmd, AsReactor cmd)
+        => ElementalId -> TodoStartEdit -> Gadget cmd p Todo ()
+    hdlStartEdit eid _ = tickSceneThen . fmap (fromMaybe (pure ())) . runMaybeT $ do
+            -- don't allow editing of completed todos
+            b <- use (_model._completed)
+            guard (not b)
+            _model._editing .= True
+            pure $ focusElement eid

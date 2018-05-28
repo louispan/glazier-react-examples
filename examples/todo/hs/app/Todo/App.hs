@@ -1,18 +1,18 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveAnyClass #-}
+-- {-# LANGUAGE DataKinds #-}
+-- {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DuplicateRecordFields #-}
+-- {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
+-- {-# LANGUAGE FlexibleInstances #-}
+-- {-# LANGUAGE FunctionalDependencies #-}
+-- {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+-- {-# LANGUAGE RankNTypes #-}
+-- {-# LANGUAGE RecordWildCards #-}
+-- {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeApplications #-}
+-- {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Todo.App where
@@ -28,19 +28,17 @@ import qualified Data.JSString as J
 import qualified Data.Map.Strict as M
 import Data.Monoid
 import Data.Semigroup.Applicative
-import Data.SKey
-import Esoteric
 import qualified GHC.Generics as G
-import Glazier.React.Event.HashChange
-import Glazier.React.Framework
-import qualified Glazier.React.Widget.Input as W
-import qualified Glazier.React.Widget.MapPile.Glam as W
+import Glazier.React
+import Glazier.React.Action.KeyDownKey
+import Glazier.React.Effect.HTMLElement
+import Glazier.React.Effect.JavaScript
+import qualified Glazier.React.Widgets.Collection.Dynamic as W
+import qualified Glazier.React.Widgets.Input as W
 import qualified JavaScript.Extras as JE
 import qualified Todo.Filter as TD
 import qualified Todo.Footer as TD
 import qualified Todo.Todo as TD
-
--- type TodosKey = Int
 
 -- data Command
 --     = RenderCommand (Element Model Plan) [JE.Property] J.JSVal
@@ -58,124 +56,103 @@ import qualified Todo.Todo as TD
 --     | TodosAction (W.List.Action TodosKey TD.Todo.Widget)
 --     | FooterAction TD.Footer.Action
 
-type TodoPile (mt :: Model (* -> *)) = W.DynamicCollection TD.Filter () (M.Map SKey) (ModelType mt TD.Todo)
+type TodoCollection = W.DynamicCollection TD.Filter () W.UKey TD.Todo
 
 -- | Just use map order
-todoSorter :: Applicative m => () -> Specimen m TD.Todo -> Specimen m TD.Todo -> m Ordering
-todoSorter _ _ _ = pure GT
+todoSorter :: Applicative m => a -> a -> m Ordering
+todoSorter _ _ = pure LT
 
-todoFilterer :: MonadReactor m => TD.Filter -> Specimen m TD.Todo -> m Bool
-todoFilterer ftr x = do
-    Frame _ x' <- doReadIORef x
+todoFilterer :: TD.Filter -> Subject TD.Todo -> ReadIORef Bool
+todoFilterer ftr sbj = do
+    scn <- doReadIORef $ sceneRef sbj
     pure $ case ftr of
         TD.All -> True
-        TD.Active -> not $ TD.completed x'
-        TD.Completed -> TD.completed x'
+        TD.Active -> not $ TD.completed $ model scn
+        TD.Completed -> TD.completed $ model scn
 
-data App (mt :: Model (* -> *)) = App
+data App = App
     { newTodo :: J.JSString
-    , todos :: TodoPile mt
+    , todos :: TodoCollection
     , footer :: TD.Footer
-    } deriving G.Generic
+    } deriving (Eq, G.Generic)
 
 makeLenses_ ''App
 
--- _newTodo :: Lens' (App mt) J.JSString
--- _newTodo = field @"newTodo"
-
--- -- | Can't use generic lens because of 'mt'
--- _todos :: Lens' (App mt) (TodoPile mt)
--- _todos = lens todos (\s a -> s { todos = a})
-
--- _footer :: Lens' (App mt) TD.Footer
--- _footer = field @"footer"
-
-
 newtype NewTodo = NewTodo J.JSString
 
-newTodoInput ::
-    ( MonadReactor m
-    , MonadJS m
-    , MonadHTMLElement m
-    )
-    => Prototype p J.JSString m NewTodo
-newTodoInput = (W.textInput eid)
-    -- & magnifyPrototype (field @"newTodo")
-    & _initializer %~ fi
-    & _display %~ fd
+newTodoInput :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+    => ElementalId -> Widget cmd p J.JSString NewTodo
+newTodoInput eid = W.textInput eid
+    & _window %~ f
+    & _gadget %~ g
   where
-    eid = GadgetId "newTodo"
+    f = modifySurfaceProperties (`DL.snoc` ("className", "new-todo"))
+    g gad = (finish gad)
+        <> (finish $ trigger_ eid _always "onBlur" () *> hdlBlur)
+        <> (trigger' eid _always "onKeyDown" fireKeyDownKey
+            >>= hdlKeyDown)
 
-    fd disp s = modifySurfaceProperties
-        (`DL.snoc` ("className", "new-todo")) (disp s)
+--   where
+--     eid = GadgetId "newTodo"
 
-    fi ini = ini
-        ^*> (trigger' eid "onBlur" () >>= hdlBlur)
-        ^*> (trigger eid "onKeyDown" (runMaybeT . fireKeyDownKey) id
-            >>= maybe mempty hdlKeyDown)
+    hdlBlur :: AsReactor cmd => Gadget cmd p J.JSString ()
+    hdlBlur = tickScene $ _model %= J.strip
 
-    hdlBlur :: (MonadReactor m)
-        => a -> MethodT (Scene p m J.JSString) m ()
-    hdlBlur _ = readrT' $ \this@Obj{..} -> lift $ do
-        doModifyIORef' self (my._model %~ J.strip)
-        dirty this
-
-    hdlKeyDown ::
-        ( MonadReactor m
-        , MonadHTMLElement m
-        )
-        => KeyDownKey -> MethodT (Scene p m J.JSString) m NewTodo
-    hdlKeyDown (KeyDownKey _ key) = methodT' $ \this@Obj{..} fire ->
+    hdlKeyDown :: (AsReactor cmd, AsHTMLElement cmd) => KeyDownKey -> Gadget cmd p J.JSString NewTodo
+    hdlKeyDown (KeyDownKey _ key) =
         case key of
             -- NB. Enter and Escape doesn't generate a onChange event
             -- So there is no adverse interation with W.input onChange
             -- updating the value under our feet.
-            "Enter" -> do
-                me <- doReadIORef self
-                let v = me ^. my._model
-                    v' = J.strip v
-                doModifyIORef' self $ my._model .~ J.empty
-                if J.null v'
-                    then pure ()
-                    else fire $ NewTodo v'
-                dirty this
+            "Enter" -> tickSceneThen $ do
+                v <- use _model
+                let v' = J.strip v
+                _model .= J.empty
+                pure $ if J.null v'
+                    then finish $ pure ()
+                    else pure $ NewTodo v'
 
-            "Escape" -> blurRef eid this -- The onBlur handler will trim the value
+            "Escape" -> finish $ blurElement eid -- The onBlur handler will trim the value
 
-            _ -> pure ()
+            _ -> finish $ pure ()
 
-newTodoInput' ::
-    ( MonadReactor m
-    , MonadJS m
-    , MonadHTMLElement m
-    )
-    => Prototype p (App ('Spec m)) m NewTodo
-newTodoInput' = magnifyPrototype _newTodo newTodoInput
+-- newTodoInput' ::
+--     ( MonadReactor m
+--     , MonadJS m
+--     , MonadHTMLElement m
+--     )
+--     => Prototype p (App ('Spec m)) m NewTodo
+-- newTodoInput' = magnifyPrototype _newTodo newTodoInput
+    -- & enlargeModel _newTodo
 
-toggleAll :: MonadReactor m => Prototype p (App ('Spec m)) m ()
-toggleAll = mempty
-    { display = \s -> do
-        ps' <- lift $ ps s
-        lf' eid s "input" (DL.fromList ps')
+toggleAll :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+    => ElementalId -> Widget cmd p TodoCollection ()
+toggleAll eid = blank
+    { window = do
+        scn <- ask
+        ps' <- lift $ ps scn
+        lf' eid "input" (DL.fromList ps')
+    , gadget = pure ()
     -- , initializer = withRef eid
     --     ^*> (trigger' eid "onChange" () >>= hdlChange)
     }
 
   where
-    ps s = traverse sequenceA
-        [ ("key", pure . JE.toJSR . reactKey $ s ^. _plan)
+    ps :: Scene TodoCollection -> ReadIORef [JE.Property]
+    ps scn = traverse sequenceA
+        [ ("key", pure . JE.toJSR $ eid)
         , ("type", pure $ "checkbox")
-        , ("checked", JE.toJSR <$> (hasActiveTodos (s ^. _model._todos.W._rawPile)))
+        , ("checked", JE.toJSR <$> (hasActiveTodos (scn ^. _model.W._rawCollection)))
         ]
 
-    eid = GadgetId "toggle-all"
+--     eid = GadgetId "toggle-all"
 
-    hasActiveTodos :: MonadReactor m => M.Map k (Specimen m TD.Todo) -> m Bool
+    hasActiveTodos :: M.Map k (Subject TD.Todo) -> ReadIORef Bool
     hasActiveTodos = fmap getAny . getAp . foldMap go
       where
-        go td = Ap $ do
-            td' <- doReadIORef td
-            pure $ Any $ td' ^. _model.TD._completed
+        go sbj = Ap $ do
+            scn <- doReadIORef $ sceneRef sbj
+            pure $ Any $ scn ^. _model.TD._completed
 
     -- hdlChange :: (MonadReactor m)
     --     => a -> MethodT (Scene p m (App ('Spec m))) m ()
@@ -191,17 +168,17 @@ toggleAll = mempty
 --             pure $ D.singleton $ SendTodosActionsCommand $ D.toList $ acts `D.snoc` W.List.RenderAction
 
 
--- | This is used by the React render callback
-displayApp ::
-    ( MonadReactor m
-    , MonadJS m
-    , MonadHTMLElement m
-    )
-    => FrameDisplay (App ('Spec m)) m ()
-displayApp s = do
-    bh "header" [("className", "header")] $ do
-        bh "h1" [("key", "heading")] (txt "todos")
-        display newTodoInput' s
+-- -- | This is used by the React render callback
+-- displayApp ::
+--     ( MonadReactor m
+--     , MonadJS m
+--     , MonadHTMLElement m
+--     )
+--     => FrameDisplay (App ('Spec m)) m ()
+-- displayApp s = do
+--     bh "header" [("className", "header")] $ do
+--         bh "h1" [("key", "heading")] (txt "todos")
+--         display newTodoInput' s
 
         -- only render if there are todos
         -- let ts = s ^. _model.field @"todos"._rawPile
@@ -361,16 +338,16 @@ displayApp s = do
 -- onHashChange ::  NativeEvent -> MaybeT IO [Action]
 -- onHashChange = eventHandlerM whenHashChange withHashChange
 
-whenHashChange :: NativeEvent -> MaybeT IO J.JSString
-whenHashChange evt = do
-    hevt <- MaybeT $ pure $ toHashChangeEvent evt
-    let n = newURL hevt
-        (_, n') = J.breakOn "#" n
-    pure n'
+-- whenHashChange :: NativeEvent -> MaybeT IO J.JSString
+-- whenHashChange evt = do
+--     hevt <- MaybeT $ pure $ toHashChangeEvent evt
+--     let n = newURL hevt
+--         (_, n') = J.breakOn "#" n
+--     pure n'
 
-withHashChange :: J.JSString -> TD.Filter
-withHashChange newHash =
-    case newHash of
-        "#/active" -> TD.Active
-        "#/completed" -> TD.Completed
-        _ -> TD.All
+-- withHashChange :: J.JSString -> TD.Filter
+-- withHashChange newHash =
+--     case newHash of
+--         "#/active" -> TD.Active
+--         "#/completed" -> TD.Completed
+--         _ -> TD.All

@@ -15,15 +15,22 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Todo.Footer where
+module Todo.Footer
+    ( Footer(..)
+    , _activeCount
+    , _completedCount
+    , _currentFilter
+    -- , hdlSetFilter
+    -- , hdlSetCounts
+    , ClearCompleted
+    , mkTodoFooter
+    ) where
 
-import Control.Arrow
 import Control.Lens
 import Control.Lens.Misc
-import Control.Monad.Trans.Class
 import qualified Data.JSString as J
 import qualified GHC.Generics as G
-import Glazier.React.Framework
+import Glazier.React
 import qualified JavaScript.Extras as JE
 import qualified Todo.Filter as TD
 
@@ -31,35 +38,22 @@ data Footer = Footer
     { activeCount :: Int
     , completedCount :: Int
     , currentFilter :: TD.Filter
-    } deriving G.Generic
+    } deriving (Show, Eq, Ord, G.Generic)
 
 makeLenses_ ''Footer
 
-hdlSetFilter :: MonadReactor m => TD.Filter -> MethodT (Scene p m Footer) m ()
-hdlSetFilter fltr = readrT' $ \this@Obj{..} -> lift $ do
-    doModifyIORef' self (my._model._currentFilter .~ fltr)
-    dirty this
+-- hdlSetFilter :: AsReactor cmd => TD.Filter -> Gadget cmd p Footer ()
+-- hdlSetFilter fltr = tickScene $  _model._currentFilter .= fltr
 
 
-hdlSetCounts :: MonadReactor m => (Int, Int) -> MethodT (Scene p m Footer) m ()
-hdlSetCounts (activeCnt, completedCnt) = readrT' $ \this@Obj{..} -> lift $ do
-    doModifyIORef' self (
-        my._model._activeCount .~ activeCnt
-        >>> my._model._completedCount .~ completedCnt)
-    dirty this
+-- hdlSetCounts :: AsReactor cmd => (Int, Int) -> Gadget cmd p Footer ()
+-- hdlSetCounts (activeCnt, completedCnt) = tickScene $ do
+--     _model._activeCount .= activeCnt
+--     _model._completedCount .= completedCnt
 
-todoFooter :: MonadReactor m => Prototype p Footer m (ClearCompleted)
-todoFooter = mempty
-            { display = todoDisplay
-            , initializer = trigger' eid "onClick" ClearCompleted
-            }
-  where
-    eid = GadgetId "footer"
-
-data ClearCompleted = ClearCompleted
-
-todoDisplay :: Monad m => FrameDisplay Footer m ()
-todoDisplay s =
+todoDisplay :: ElementalId -> Window Footer ()
+todoDisplay eid = do
+    s <- ask
     bh "footer" [("className", "footer")] $ do
         bh "span" [ ("className", "todo-count")
                     , ("key", "todo-count")] $ do
@@ -97,10 +91,16 @@ todoDisplay s =
                     ] $
                     txt "Completed"
         if (s ^. _model._completedCount > 0)
-           then bh' eid s "button"
+           then bh' eid "button"
                     [("key", "clear-completed"), ("className", "clear-completed")] $
-                            -- , ("onClick", s ^. fireClearCompleted . to JE.toJSR)] $
                     txt "Clear completed"
            else mempty
-  where
-    eid = GadgetId "footer"
+
+data ClearCompleted = ClearCompleted
+mkTodoFooter :: (MkId m, AsReactor cmd) => m (Widget cmd p Footer ClearCompleted)
+mkTodoFooter = do
+    eid <- mkElementalId "footer"
+    pure $ Widget
+            { window = todoDisplay eid
+            , gadget = trigger_ eid _always "onClick" ClearCompleted
+            }

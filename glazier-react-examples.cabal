@@ -15,18 +15,17 @@ cabal-version:       >=1.10
 
 executable glazier-react-todo
   hs-source-dirs:      examples/todo/hs/app
-  other-modules:
-                      --  Todo.App
+  other-modules:       Todo.App
                        Todo.Todo
-                      --  Todo.Filter
-                      --  Todo.Footer
+                       Todo.Filter
+                       Todo.Footer
   main-is:             Main.hs
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
   cpp-options:         -DGHCJS_BROWSER
   build-depends:       base >= 4.7 && < 5
-                     , alternators >= 0.2
+                     , alternators >= 1.0
                      , containers >= 0.5
-                     , data-diverse >= 4.0
+                     , data-diverse >= 4.1
                      , data-diverse-lens >= 4.1
                      , deepseq >= 1.4
                      , disposable >= 0.3
@@ -44,7 +43,7 @@ executable glazier-react-todo
                     --  , pipes >= 4
                     --  , pipes-concurrency >= 2
                     --  , pipes-misc >= 0.3.1
-                    --  , reducers >= 3.12.1
+                     , reducers >= 3.12
                     --  , stm >= 2.4
                      , tagged >= 0.8.5
                      , text >= 1.2
