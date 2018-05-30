@@ -8,11 +8,11 @@
 -- {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
--- {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RankNTypes #-}
 -- {-# LANGUAGE RecordWildCards #-}
--- {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
--- {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Todo.App where
@@ -27,6 +27,7 @@ import qualified Data.DList as DL
 import qualified Data.JSString as J
 import qualified Data.Map.Strict as M
 import Data.Monoid
+import Data.Proxy
 import Data.Semigroup.Applicative
 import qualified GHC.Generics as G
 import Glazier.React
@@ -125,9 +126,9 @@ newTodoInput eid = W.textInput eid
 -- newTodoInput' = magnifyPrototype _newTodo newTodoInput
     -- & enlargeModel _newTodo
 
-toggleAll :: (AsReactor cmd)
+completeAll :: (AsReactor cmd)
     => ElementalId -> Widget cmd p (TodoCollection Subject) ()
-toggleAll eid = blank
+completeAll eid = prototype
     { window = do
         scn <- ask
         ps' <- lift $ ps scn
@@ -157,40 +158,32 @@ toggleAll eid = blank
         trigger_ eid _always "onChange" ()
         scn <- getScene
         foldMap (\sbj -> lift $ gadgetWith sbj
-            (tickScene $ (_model.TD._completed) %= not)) (view (_model.W._rawCollection) scn)
+            (tickScene $ (_model.TD._completed) %~ True)) (view (_model.W._rawCollection) scn)
 
-
--- -- | This is used by the React render callback
--- displayApp ::
---     ( MonadReactor m
---     , MonadJS m
---     , MonadHTMLElement m
---     )
---     => FrameDisplay (App ('Spec m)) m ()
--- displayApp s = do
---     bh "header" [("className", "header")] $ do
---         bh "h1" [("key", "heading")] (txt "todos")
---         display newTodoInput' s
+-- | This is used by the React render callback
+displayApp :: forall cmd. (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+    => Proxy cmd -> ElementalId -> ElementalId -> Window (App Subject) ()
+displayApp _ newTodoId completeAllId = do
+    s <- ask
+    bh "header" [("className", "header")] $ do
+        bh "h1" [("key", "heading")] (txt "todos")
+        enlargeScene _newTodo (window (newTodoInput @cmd newTodoId))
 
         -- only render if there are todos
-        -- let ts = s ^. _model.field @"todos"._rawPile
-        -- if M.null ts
-        --     then pure ()
-        --     else bh "section" [ ("key", "main")
-        --                             , ("className", "main")
-        --                             ] $ do
+        let ts = s ^. _model._todos.W._rawCollection
+        if M.null ts
+            then pure ()
+            else bh "section" [ ("key", "main")
+                                    , ("className", "main")
+                                    ] $ do
                 -- Complete all checkbox
-                -- lf "input" [ ("key", "toggle-all")
-                --                 , ("className", "toggle-all")
-                --                 , ("type", "checkbox")
-                --                 , ("checked", s ^. todos . W.List.items . to (JE.toJSR . not . hasActiveTodos))
-                --                 , ("onChange", s ^. fireToggleCompleteAll . to JE.toJSR)
-                --                 ]
-                -- Render the list of todos
+                enlargeScene _todos (window (completeAll @cmd completeAllId))
+
+                -- -- Render the list of todos
                 -- display ??? (s ^. _model.field @"todos")
 
                 -- Render the footer
-                -- display TD.todoFooter (s ^. _model.field @"footer")
+                display TD.todoFooter (s ^. _model.field @"footer")
 
 
 
@@ -343,3 +336,4 @@ toggleAll eid = blank
 --         "#/active" -> TD.Active
 --         "#/completed" -> TD.Completed
 --         _ -> TD.All
+

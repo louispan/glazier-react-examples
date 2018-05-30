@@ -54,7 +54,7 @@ todoToggleComplete eid =
 
 todoDestroy :: (AsReactor cmd) => ElementalId -> Widget cmd p s TodoDestroy
 todoDestroy eid =
-    blank
+    prototype
     { window = lf' eid "button"
             [ ("key", "destroy")
             , ("className", "destroy")]
@@ -63,7 +63,7 @@ todoDestroy eid =
 
 todoLabel :: (AsReactor cmd) => ElementalId -> Widget cmd p Todo TodoStartEdit
 todoLabel eid =
-    blank
+    prototype
     { window = do
         str <- view (_model._value)
         bh' eid "label" [("key", "label")] $
