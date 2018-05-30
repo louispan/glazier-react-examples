@@ -56,7 +56,7 @@ import qualified Todo.Todo as TD
 --     | TodosAction (W.List.Action TodosKey TD.Todo.Widget)
 --     | FooterAction TD.Footer.Action
 
-type TodoCollection = W.DynamicCollection TD.Filter () W.UKey TD.Todo
+type TodoCollection f = W.DynamicCollection TD.Filter () W.UKey TD.Todo f
 
 -- | Just use map order
 todoSorter :: Applicative m => a -> a -> m Ordering
@@ -70,11 +70,11 @@ todoFilterer ftr sbj = do
         TD.Active -> not $ TD.completed $ model scn
         TD.Completed -> TD.completed $ model scn
 
-data App = App
+data App f = App
     { newTodo :: J.JSString
-    , todos :: TodoCollection
+    , todos :: TodoCollection f
     , footer :: TD.Footer
-    } deriving (Eq, G.Generic)
+    } deriving (G.Generic)
 
 makeLenses_ ''App
 
@@ -125,28 +125,25 @@ newTodoInput eid = W.textInput eid
 -- newTodoInput' = magnifyPrototype _newTodo newTodoInput
     -- & enlargeModel _newTodo
 
-toggleAll :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => ElementalId -> Widget cmd p TodoCollection ()
+toggleAll :: (AsReactor cmd)
+    => ElementalId -> Widget cmd p (TodoCollection Subject) ()
 toggleAll eid = blank
     { window = do
         scn <- ask
         ps' <- lift $ ps scn
         lf' eid "input" (DL.fromList ps')
-    -- , gadget = hdlElementalRef eid
-    --     <> hdlChange
-    -- , initializer = withRef eid
-    --     ^*> (trigger' eid "onChange" () >>= hdlChange)
+    , gadget = hdlElementalRef eid <> hdlChange
     }
 
+--     eid = GadgetId "toggle-all"
+
   where
-    ps :: Scene TodoCollection -> ReadIORef [JE.Property]
+    ps :: Scene (TodoCollection Subject) -> ReadIORef [JE.Property]
     ps scn = traverse sequenceA
         [ ("key", pure . JE.toJSR $ eid)
         , ("type", pure $ "checkbox")
         , ("checked", JE.toJSR <$> (hasActiveTodos (scn ^. _model.W._rawCollection)))
         ]
-
---     eid = GadgetId "toggle-all"
 
     hasActiveTodos :: M.Map k (Subject TD.Todo) -> ReadIORef Bool
     hasActiveTodos = fmap getAny . getAp . foldMap go
@@ -155,21 +152,12 @@ toggleAll eid = blank
             scn <- doReadIORef $ sceneRef sbj
             pure $ Any $ scn ^. _model.TD._completed
 
-    hdlChange :: (AsReactor cmd, AsJavascript cmd) => Gadget cmd p TodoCollection ()
-    hdlChange = tickScene $ _model %~ not
-
-    -- hdlChange :: (MonadReactor m)
-    --     => a -> MethodT (Scene p m (App ('Spec m))) m ()
-    -- hdlChange _ = readrT' $ \this@Obj{..} -> do
-    --     lift $ do
-    --         doModifyIORef' self (my._model %~ not)
-    --         dirty this
-
---         ToggleCompleteAllAction -> do
---             s <- use (todos . W.List.items)
---             let b = hasActiveTodos s
---             let acts = M.foldMapWithKey (toggleCompleteAll b) s
---             pure $ D.singleton $ SendTodosActionsCommand $ D.toList $ acts `D.snoc` W.List.RenderAction
+    hdlChange :: AsReactor cmd => Gadget cmd p (TodoCollection Subject) ()
+    hdlChange = do
+        trigger_ eid _always "onChange" ()
+        scn <- getScene
+        foldMap (\sbj -> lift $ gadgetWith sbj
+            (tickScene $ (_model.TD._completed) %= not)) (view (_model.W._rawCollection) scn)
 
 
 -- -- | This is used by the React render callback
