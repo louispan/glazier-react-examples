@@ -87,7 +87,7 @@ $(BUILD_MAKE_DIR)/$(PROJECT_NAME).min.js: $(EXTERNS) $(BUILD_MAKE_DIR)/$(PROJECT
 		--js_output_file $(BUILD_MAKE_DIR)/$(PROJECT_NAME).min.js
 
 $(BUILD_MAKE_DIR)/react-externs.js:
-	wget https://raw.githubusercontent.com/steida/react-externs/master/externs.js -O $(BUILD_MAKE_DIR)/react-externs.js
+	wget https://raw.githubusercontent.com/stria/react-externs/master/externs.js -O $(BUILD_MAKE_DIR)/react-externs.js
 
 
 $(BUILD_MAKE_DIR)/all.js.externs: | env dir build

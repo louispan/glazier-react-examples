@@ -15,7 +15,8 @@ cabal-version:       >=1.10
 
 executable glazier-react-todo
   hs-source-dirs:      examples/todo/hs/app
-  other-modules:       Todo.App
+  other-modules:       
+                       Todo.App
                        Todo.Todo
                        Todo.Filter
                        Todo.Footer
@@ -55,7 +56,7 @@ executable glazier-react-todo
     build-depends: ghcjs-base
                  , ghcjs-prim >= 0.1
   if !impl(ghcjs)
-    build-depends: ghcjs-base-stub >= 0.1.0.4
+    build-depends: ghcjs-base-stub >= 0.2
 
 source-repository head
   type:     git

@@ -81,20 +81,19 @@ makeLenses_ ''App
 
 newtype NewTodo = NewTodo J.JSString
 
-newTodoInput :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => ElementalId -> Widget cmd p J.JSString NewTodo
-newTodoInput eid = W.textInput eid
-    & _window %~ f
-    & _gadget %~ g
-  where
-    f = modifySurfaceProperties (`DL.snoc` ("className", "new-todo"))
-    g gad = (finish gad)
-        <> (finish $ trigger_ eid _always "onBlur" () *> hdlBlur)
-        <> (trigger' eid _always "onKeyDown" fireKeyDownKey
-            >>= hdlKeyDown)
-
 --   where
---     eid = GadgetId "newTodo"
+--     ri = GadgetId "newTodo"
+
+newTodoInput :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+    => ReactId -> Widget cmd p J.JSString NewTodo
+newTodoInput ri =
+    let wid = finish . void . overWindow fw $ W.textInput ri
+    in wid `also` lift gad
+  where
+    fw = (*> modify' (overSurfaceProperties (`DL.snoc` ("className", "new-todo"))))
+    gad = (finish $ trigger_ ri _always "onBlur" () *> hdlBlur)
+        `also` (trigger' ri _always "onKeyDown" fireKeyDownKey
+            >>= hdlKeyDown)
 
     hdlBlur :: AsReactor cmd => Gadget cmd p J.JSString ()
     hdlBlur = tickScene $ _model %= J.strip
@@ -113,7 +112,7 @@ newTodoInput eid = W.textInput eid
                     then finish $ pure ()
                     else pure $ NewTodo v'
 
-            "Escape" -> finish $ blurElement eid -- The onBlur handler will trim the value
+            "Escape" -> finish $ blurElement ri -- The onBlur handler will trim the value
 
             _ -> finish $ pure ()
 
@@ -126,22 +125,21 @@ newTodoInput eid = W.textInput eid
 -- newTodoInput' = magnifyPrototype _newTodo newTodoInput
     -- & enlargeModel _newTodo
 
+--     ri = GadgetId "toggle-all"
+
 completeAll :: (AsReactor cmd)
-    => ElementalId -> Widget cmd p (TodoCollection Subject) ()
-completeAll eid = prototype
-    { window = do
-        scn <- ask
-        ps' <- lift $ ps scn
-        lf' eid "input" (DL.fromList ps')
-    , gadget = hdlElementalRef eid <> hdlChange
-    }
-
---     eid = GadgetId "toggle-all"
-
+    => ReactId -> Widget cmd p (TodoCollection Subject) a
+completeAll ri =
+    let win = do
+            scn <- ask
+            ps' <- lift $ ps scn
+            lf' ri "input" (DL.fromList ps')
+        gad = finish $ hdlElementalRef ri `also` hdlChange
+    in (display win) `also` (lift gad)
   where
     ps :: Scene (TodoCollection Subject) -> ReadIORef [JE.Property]
     ps scn = traverse sequenceA
-        [ ("key", pure . JE.toJSR $ eid)
+        [ ("key", pure . JE.toJSR $ ri)
         , ("type", pure $ "checkbox")
         , ("checked", JE.toJSR <$> (hasActiveTodos (scn ^. _model.W._rawCollection)))
         ]
@@ -155,35 +153,36 @@ completeAll eid = prototype
 
     hdlChange :: AsReactor cmd => Gadget cmd p (TodoCollection Subject) ()
     hdlChange = do
-        trigger_ eid _always "onChange" ()
+        trigger_ ri _always "onChange" ()
         scn <- getScene
-        foldMap (\sbj -> lift $ gadgetWith sbj
-            (tickScene $ (_model.TD._completed) %~ True)) (view (_model.W._rawCollection) scn)
+        getAls $ foldMap (\sbj -> Als $ lift $ gadgetWith sbj
+                (tickScene $ (_model.TD._completed) .= True))
+            (view (_model.W._rawCollection) scn)
 
--- | This is used by the React render callback
-displayApp :: forall cmd. (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => Proxy cmd -> ElementalId -> ElementalId -> Window (App Subject) ()
-displayApp _ newTodoId completeAllId = do
-    s <- ask
-    bh "header" [("className", "header")] $ do
-        bh "h1" [("key", "heading")] (txt "todos")
-        enlargeScene _newTodo (window (newTodoInput @cmd newTodoId))
+-- -- | This is used by the React render callback
+-- displayApp :: forall cmd. (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+--     => Proxy cmd -> ElementalId -> ElementalId -> Window (App Subject) ()
+-- displayApp _ newTodoId completeAllId = do
+--     s <- ask
+--     bh "header" [("className", "header")] $ do
+--         bh "h1" [("key", "heading")] (txt "todos")
+--         enlargeScene _newTodo (window (newTodoInput @cmd newTodoId))
 
-        -- only render if there are todos
-        let ts = s ^. _model._todos.W._rawCollection
-        if M.null ts
-            then pure ()
-            else bh "section" [ ("key", "main")
-                                    , ("className", "main")
-                                    ] $ do
-                -- Complete all checkbox
-                enlargeScene _todos (window (completeAll @cmd completeAllId))
+--         -- only render if there are todos
+--         let ts = s ^. _model._todos.W._rawCollection
+--         if M.null ts
+--             then pure ()
+--             else bh "section" [ ("key", "main")
+--                                     , ("className", "main")
+--                                     ] $ do
+--                 -- Complete all checkbox
+--                 enlargeScene _todos (window (completeAll @cmd completeAllId))
 
-                -- -- Render the list of todos
-                -- display ??? (s ^. _model.field @"todos")
+--                 -- -- Render the list of todos
+--                 -- display ??? (s ^. _model.field @"todos")
 
-                -- Render the footer
-                display TD.todoFooter (s ^. _model.field @"footer")
+--                 -- Render the footer
+--                 display TD.todoFooter (s ^. _model.field @"footer")
 
 
 

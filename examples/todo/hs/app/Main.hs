@@ -38,10 +38,11 @@ module Main (main) where
 -- import qualified Pipes.Lift as PL
 -- import qualified Pipes.Misc as PM
 -- import qualified Pipes.Prelude as PP
-import qualified Todo.App as TD.App
+-- import qualified Todo.App as TD.App
 -- import qualified Todo.App.Run as TD.App
-import qualified Todo.Filter as TD.Filter
-import qualified Todo.Footer as TD.Footer
+-- import qualified Todo.Filter as TD.Filter
+-- import qualified Todo.Footer as TD.Footer
+import qualified Todo.Todo as TD.Todo
 
 main :: IO ()
 main = pure ()

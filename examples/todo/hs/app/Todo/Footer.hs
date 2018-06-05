@@ -51,8 +51,8 @@ makeLenses_ ''Footer
 --     _model._activeCount .= activeCnt
 --     _model._completedCount .= completedCnt
 
-todoDisplay :: ElementalId -> Window Footer ()
-todoDisplay eid = do
+todoDisplay :: ReactId -> Window Footer ()
+todoDisplay ri = do
     s <- ask
     bh "footer" [("className", "footer")] $ do
         bh "span" [ ("className", "todo-count")
@@ -91,16 +91,15 @@ todoDisplay eid = do
                     ] $
                     txt "Completed"
         if (s ^. _model._completedCount > 0)
-           then bh' eid "button"
+           then bh' ri "button"
                     [("key", "clear-completed"), ("className", "clear-completed")] $
                     txt "Clear completed"
-           else mempty
+           else alsoZero
 
 data ClearCompleted = ClearCompleted
-mkTodoFooter :: (MkId m, AsReactor cmd) => m (Widget cmd p Footer ClearCompleted)
-mkTodoFooter = do
-    eid <- mkElementalId "footer"
-    pure $ Widget
-            { window = todoDisplay eid
-            , gadget = trigger_ eid _always "onClick" ClearCompleted
-            }
+
+mkTodoFooter :: (AsReactor cmd) => ReactId -> Widget cmd p Footer ClearCompleted
+mkTodoFooter ri =
+    let win = todoDisplay ri
+        gad = trigger_ ri _always "onClick" ClearCompleted
+    in (display win) `also` (lift gad)
