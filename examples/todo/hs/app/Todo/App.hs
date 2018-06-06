@@ -1,4 +1,4 @@
--- {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DataKinds #-}
 -- {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 -- {-# LANGUAGE DuplicateRecordFields #-}
@@ -22,6 +22,7 @@ import Control.Lens.Misc
 import Control.Monad
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
+import Data.Diverse.Lens
 import Data.Diverse.Profunctor
 import qualified Data.DList as DL
 import qualified Data.JSString as J
@@ -60,16 +61,16 @@ import qualified Todo.Todo as TD
 type TodoCollection f = W.DynamicCollection TD.Filter () W.UKey TD.Todo f
 
 -- | Just use map order
-todoSorter :: Applicative m => a -> a -> m Ordering
-todoSorter _ _ = pure LT
+todoSorter :: Applicative m => srt -> a -> a -> m Ordering
+todoSorter _ _ _ = pure LT
 
-todoFilterer :: TD.Filter -> Subject TD.Todo -> ReadIORef Bool
-todoFilterer ftr sbj = do
-    scn <- doReadIORef $ sceneRef sbj
+todoFilterer :: TD.Filter -> TD.Todo -> ReadIORef Bool
+todoFilterer ftr td = do
+    -- scn <- doReadIORef $ sceneRef sbj
     pure $ case ftr of
         TD.All -> True
-        TD.Active -> not $ TD.completed $ model scn
-        TD.Completed -> TD.completed $ model scn
+        TD.Active -> not $ TD.completed $ td
+        TD.Completed -> TD.completed $ td
 
 data App f = App
     { newTodo :: J.JSString
@@ -80,9 +81,6 @@ data App f = App
 makeLenses_ ''App
 
 newtype NewTodo = NewTodo J.JSString
-
---   where
---     ri = GadgetId "newTodo"
 
 newTodoInput :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
     => ReactId -> Widget cmd p J.JSString NewTodo
@@ -125,16 +123,16 @@ newTodoInput ri =
 -- newTodoInput' = magnifyPrototype _newTodo newTodoInput
     -- & enlargeModel _newTodo
 
---     ri = GadgetId "toggle-all"
+data CompleteAll = CompleteAll
 
 completeAll :: (AsReactor cmd)
-    => ReactId -> Widget cmd p (TodoCollection Subject) a
+    => ReactId -> Widget cmd p (TodoCollection Subject) CompleteAll
 completeAll ri =
     let win = do
             scn <- ask
             ps' <- lift $ ps scn
             lf' ri "input" (DL.fromList ps')
-        gad = finish $ hdlElementalRef ri `also` hdlChange
+        gad = (finish $ hdlElementalRef ri) `also` hdlChange
     in (display win) `also` (lift gad)
   where
     ps :: Scene (TodoCollection Subject) -> ReadIORef [JE.Property]
@@ -151,51 +149,56 @@ completeAll ri =
             scn <- doReadIORef $ sceneRef sbj
             pure $ Any $ scn ^. _model.TD._completed
 
-    hdlChange :: AsReactor cmd => Gadget cmd p (TodoCollection Subject) ()
+    hdlChange :: AsReactor cmd => Gadget cmd p (TodoCollection Subject) CompleteAll
     hdlChange = do
         trigger_ ri _always "onChange" ()
         scn <- getScene
         getAls $ foldMap (\sbj -> Als $ lift $ gadgetWith sbj
                 (tickScene $ (_model.TD._completed) .= True))
             (view (_model.W._rawCollection) scn)
+        pure CompleteAll
 
--- -- | This is used by the React render callback
--- displayApp :: forall cmd. (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
---     => Proxy cmd -> ElementalId -> ElementalId -> Window (App Subject) ()
--- displayApp _ newTodoId completeAllId = do
---     s <- ask
---     bh "header" [("className", "header")] $ do
---         bh "h1" [("key", "heading")] (txt "todos")
---         enlargeScene _newTodo (window (newTodoInput @cmd newTodoId))
+app :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+    => Widget cmd p (App Subject) (Which '[NewTodo, CompleteAll, TD.ClearCompleted])
+app =
+    let newTodo' = pickOnly <$> (magnifyWidget _newTodo $ mkReactId "new-todo" >>= newTodoInput)
+        completeAll' = pickOnly <$> (magnifyWidget _todos $ mkReactId "complete-all" >>= completeAll)
+        todoFooter' = pickOnly <$> (magnifyWidget _footer $ mkReactId "todo-footer" >>= TD.todoFooter)
+    in withWindow' newTodo' $ \newTodoWin ->
+        withWindow' completeAll' $ \completeAllWin ->
+        withWindow' todoFooter' $ \todoFooterWin ->
+            let win = do
+                    s <- ask
+                    bh "header" [("className", "header")] $ do
+                        bh "h1" [("key", "heading")] (txt "todos")
+                        newTodoWin
 
---         -- only render if there are todos
---         let ts = s ^. _model._todos.W._rawCollection
---         if M.null ts
---             then pure ()
---             else bh "section" [ ("key", "main")
---                                     , ("className", "main")
---                                     ] $ do
---                 -- Complete all checkbox
---                 enlargeScene _todos (window (completeAll @cmd completeAllId))
+                    -- only render if there are todos
+                    let ts = s ^. _model._todos.W._rawCollection
+                    if M.null ts
+                        then pure ()
+                        else bh "section" [ ("key", "main")
+                                                , ("className", "main")
+                                                ] $ do
+                            -- Complete all checkbox
+                            completeAllWin
 
---                 -- -- Render the list of todos
---                 -- display ??? (s ^. _model.field @"todos")
+                            -- Render the list of todos
+                            magnifiedScene _todos W.dynamicCollectionWindow
 
---                 -- Render the footer
---                 display TD.todoFooter (s ^. _model.field @"footer")
+                            -- Render the footer
+                            todoFooterWin
+            in definitely $ display win
 
-
-
-
-
--- inputWindow :: G.WindowT (Scene Model Plan) ReactMl ()
--- inputWindow = magnify (input . scene) (window W.Input.widget)
-
--- todoListWindow :: ReactMlT Identity () -> G.WindowT (Scene Model Plan) ReactMl ()
--- todoListWindow separator = magnify (todos . scene) (window (W.List.widget separator TD.Todo.widget))
-
--- footerWindow :: G.WindowT (Scene Model Plan) ReactMl ()
--- footerWindow = magnify (footer . scene) (window TD.Footer.widget)
+insertTodo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+    => NewTodo -> Gadget cmd p (App Subject) (Which '[TD.TodoToggleComplete, TD.TodoDestroy])
+insertTodo (NewTodo n) = withMkSubject TD.todo (TD.Todo n False False) $ \sbj ->
+    tickScene $ do
+        mk <- use (_model._todos.W._rawCollection.to M.lookupMax)
+        let k' = case mk of
+                Just (k, _) -> W.largerUKey k
+                Nothing -> W.zeroUKey
+        zoom (editSceneModel _todos) $ W.insertDynamicCollectionItem todoFilterer todoSorter k' sbj
 
 -- updateFooterGadget :: G.Gadget Action (Element Model Plan) (D.DList Command)
 -- updateFooterGadget = do
@@ -205,7 +208,7 @@ completeAll ri =
 
 -- gadget :: ReactMlT Identity () -> G.Gadget Action (Element Model Plan) (D.DList Command)
 -- gadget separator = do
---     a <- ask
+--     a <- askπ
 --     case a of
 --         ComponentRefAction node -> do
 --             componentRef .= node

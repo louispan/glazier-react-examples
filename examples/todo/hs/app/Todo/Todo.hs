@@ -13,6 +13,7 @@ module Todo.Todo
     , _completed
     , _editing
     , TodoDestroy
+    , TodoToggleComplete
     , todo
     ) where
 
@@ -41,12 +42,12 @@ data Todo = Todo
 makeLenses_ ''Todo
 
 data TodoDestroy = TodoDestroy
-data TodoComplete = TodoComplete
+data TodoToggleComplete = TodoToggleComplete
 data TodoStartEdit = TodoStartEdit
 
-todoToggleComplete :: (AsReactor cmd) => ReactId -> Widget cmd p Todo TodoComplete
+todoToggleComplete :: (AsReactor cmd) => ReactId -> Widget cmd p Todo TodoToggleComplete
 todoToggleComplete ri =
-    let wid = const TodoComplete <$> overWindow fw (W.checkboxInput ri)
+    let wid = const TodoToggleComplete <$> overWindow fw (W.checkboxInput ri)
     in magnifyWidget _completed wid
   where
     fw = (*> modify' (overSurfaceProperties (`DL.snoc` ("className", "toggle"))))
@@ -68,7 +69,7 @@ todoLabel ri =
         gad = trigger_ ri _always "onDoubleClick" TodoStartEdit
     in (display win) `also` (lift gad)
 
-todoView :: (AsReactor cmd) => Widget cmd p Todo (Which '[TodoComplete, TodoDestroy, TodoStartEdit])
+todoView :: (AsReactor cmd) => Widget cmd p Todo (Which '[TodoToggleComplete, TodoDestroy, TodoStartEdit])
 todoView =
     let todoToggleComplete' = mkReactId "toggle" >>= todoToggleComplete
         todoDestroy' = mkReactId "destroy" >>= todoDestroy
@@ -88,8 +89,8 @@ todoInput ri =
     in wid'
   where
     fw = (*> modify' (overSurfaceProperties (`DL.snoc` ("className", "edit"))))
-    gad = (finish $ hdlFocus)
-        `also` (finish $ hdlBlur)
+    gad = (finish hdlFocus)
+        `also` (finish hdlBlur)
         `also` hdlKeyDown
 
     hdlFocus :: AsReactor cmd => Gadget cmd p Todo ()
@@ -125,7 +126,7 @@ todoInput ri =
             _ -> finish $ pure ()
 
 todo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => Widget cmd p Todo (Which '[TodoComplete, TodoDestroy])
+    => Widget cmd p Todo (Which '[TodoToggleComplete, TodoDestroy])
 todo = do
     ri <- mkReactId "input"
     let todoInput' = todoInput ri
@@ -141,7 +142,9 @@ todo = do
             ]
             win
 
-    hdlStartEdit' ri = injectedK $  lift . finished . hdlStartEdit ri . obvious
+    hdlStartEdit' :: (AsHTMLElement cmd, AsReactor cmd)
+        => ReactId -> Which '[TodoToggleComplete, TodoDestroy, TodoStartEdit] -> Widget cmd p Todo (Which '[TodoToggleComplete, TodoDestroy])
+    hdlStartEdit' ri = injectedK $ lift . definitely . finish . hdlStartEdit ri . obvious
 
     hdlStartEdit :: (AsHTMLElement cmd, AsReactor cmd)
         => ReactId -> TodoStartEdit -> Gadget cmd p Todo ()

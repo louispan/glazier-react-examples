@@ -23,7 +23,7 @@ module Todo.Footer
     -- , hdlSetFilter
     -- , hdlSetCounts
     , ClearCompleted
-    , mkTodoFooter
+    , todoFooter
     ) where
 
 import Control.Lens
@@ -98,8 +98,8 @@ todoDisplay ri = do
 
 data ClearCompleted = ClearCompleted
 
-mkTodoFooter :: (AsReactor cmd) => ReactId -> Widget cmd p Footer ClearCompleted
-mkTodoFooter ri =
+todoFooter :: (AsReactor cmd) => ReactId -> Widget cmd p Footer ClearCompleted
+todoFooter ri =
     let win = todoDisplay ri
         gad = trigger_ ri _always "onClick" ClearCompleted
     in (display win) `also` (lift gad)
