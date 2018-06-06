@@ -53,7 +53,7 @@ import qualified Todo.Todo as TD
 -- data Action
 --     = ComponentRefAction J.JSVal
 --     | RenderAction
---     | ToggleCompleteAllAction
+--     | ToggleAppCompleteAllAction
 --     | InputAction W.Input.Action
 --     | TodosAction (W.List.Action TodosKey TD.Todo.Widget)
 --     | FooterAction TD.Footer.Action
@@ -123,11 +123,11 @@ newTodoInput ri =
 -- newTodoInput' = magnifyPrototype _newTodo newTodoInput
     -- & enlargeModel _newTodo
 
-data CompleteAll = CompleteAll
+data AppCompleteAll = AppCompleteAll
 
-completeAll :: (AsReactor cmd)
-    => ReactId -> Widget cmd p (TodoCollection Subject) CompleteAll
-completeAll ri =
+appCompleteAll :: (AsReactor cmd)
+    => ReactId -> Widget cmd p (TodoCollection Subject) AppCompleteAll
+appCompleteAll ri =
     let win = do
             scn <- ask
             ps' <- lift $ ps scn
@@ -149,23 +149,23 @@ completeAll ri =
             scn <- doReadIORef $ sceneRef sbj
             pure $ Any $ scn ^. _model.TD._completed
 
-    hdlChange :: AsReactor cmd => Gadget cmd p (TodoCollection Subject) CompleteAll
+    hdlChange :: AsReactor cmd => Gadget cmd p (TodoCollection Subject) AppCompleteAll
     hdlChange = do
         trigger_ ri _always "onChange" ()
         scn <- getScene
         getAls $ foldMap (\sbj -> Als $ lift $ gadgetWith sbj
                 (tickScene $ (_model.TD._completed) .= True))
             (view (_model.W._rawCollection) scn)
-        pure CompleteAll
+        pure AppCompleteAll
 
 app :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => Widget cmd p (App Subject) (Which '[NewTodo, CompleteAll, TD.ClearCompleted])
+    => Widget cmd p (App Subject) (Which '[NewTodo, AppCompleteAll, TD.ClearCompleted ()])
 app =
     let newTodo' = pickOnly <$> (magnifyWidget _newTodo $ mkReactId "new-todo" >>= newTodoInput)
-        completeAll' = pickOnly <$> (magnifyWidget _todos $ mkReactId "complete-all" >>= completeAll)
+        appCompleteAll' = pickOnly <$> (magnifyWidget _todos $ mkReactId "complete-all" >>= appCompleteAll)
         todoFooter' = pickOnly <$> (magnifyWidget _footer $ mkReactId "todo-footer" >>= TD.todoFooter)
     in withWindow' newTodo' $ \newTodoWin ->
-        withWindow' completeAll' $ \completeAllWin ->
+        withWindow' appCompleteAll' $ \appCompleteAllWin ->
         withWindow' todoFooter' $ \todoFooterWin ->
             let win = do
                     s <- ask
@@ -181,7 +181,7 @@ app =
                                                 , ("className", "main")
                                                 ] $ do
                             -- Complete all checkbox
-                            completeAllWin
+                            appCompleteAllWin
 
                             -- Render the list of todos
                             magnifiedScene _todos W.dynamicCollectionWindow
@@ -191,7 +191,7 @@ app =
             in definitely $ display win
 
 insertTodo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => NewTodo -> Gadget cmd p (App Subject) (Which '[TD.TodoToggleComplete, TD.TodoDestroy])
+    => NewTodo -> Gadget cmd p (App Subject) (Which '[TD.TodoToggleComplete (), TD.TodoDestroy ()])
 insertTodo (NewTodo n) = withMkSubject TD.todo (TD.Todo n False False) $ \sbj ->
     tickScene $ do
         mk <- use (_model._todos.W._rawCollection.to M.lookupMax)
@@ -199,6 +199,12 @@ insertTodo (NewTodo n) = withMkSubject TD.todo (TD.Todo n False False) $ \sbj ->
                 Just (k, _) -> W.largerUKey k
                 Nothing -> W.zeroUKey
         zoom (editSceneModel _todos) $ W.insertDynamicCollectionItem todoFilterer todoSorter k' sbj
+
+wack :: Int -> Int
+wack = \(a :: Int) -> a
+
+-- destroyTodo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+--     => TD.TodoDestroy -> Gadget cmd p (App Subject) (Which '[TD.TodoToggleComplete, TD.TodoDestroy])
 
 -- updateFooterGadget :: G.Gadget Action (Element Model Plan) (D.DList Command)
 -- updateFooterGadget = do
@@ -217,10 +223,10 @@ insertTodo (NewTodo n) = withMkSubject TD.todo (TD.Todo n False False) $ \sbj ->
 --         RenderAction ->
 --             D.singleton <$> basicRenderCmd frameNum componentRef RenderCommand
 
---         ToggleCompleteAllAction -> do
+--         ToggleAppCompleteAllAction -> do
 --             s <- use (todos . W.List.items)
 --             let b = hasActiveTodos s
---             let acts = M.foldMapWithKey (toggleCompleteAll b) s
+--             let acts = M.foldMapWithKey (toggleAppCompleteAll b) s
 --             pure $ D.singleton $ SendTodosActionsCommand $ D.toList $ acts `D.snoc` W.List.RenderAction
 
 --         InputAction (W.Input.SubmitAction _ str) -> do
@@ -296,12 +302,12 @@ insertTodo (NewTodo n) = withMkSubject TD.todo (TD.Todo n False False) $ \sbj ->
 --         False
 --         False
 
---     toggleCompleteAll
+--     toggleAppCompleteAll
 --         :: Bool
 --         -> TodosKey
 --         -> ElementOf TD.Todo.Widget
 --         -> D.DList (W.List.Action TodosKey TD.Todo.Widget)
---     toggleCompleteAll b k todoElement =
+--     toggleAppCompleteAll b k todoElement =
 --         if todoElement ^. (TD.Todo.schema . TD.Todo.completed) /= b
 --             then D.singleton $ W.List.ItemAction k (TD.Todo.SetCompletedAction b)
 --             else mempty

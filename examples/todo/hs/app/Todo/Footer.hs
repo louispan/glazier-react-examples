@@ -29,6 +29,7 @@ module Todo.Footer
 import Control.Lens
 import Control.Lens.Misc
 import qualified Data.JSString as J
+import Data.Tagged
 import qualified GHC.Generics as G
 import Glazier.React
 import qualified JavaScript.Extras as JE
@@ -96,10 +97,10 @@ todoDisplay ri = do
                     txt "Clear completed"
            else alsoZero
 
-data ClearCompleted = ClearCompleted
+type ClearCompleted = Tagged "ClearCompleted"
 
-todoFooter :: (AsReactor cmd) => ReactId -> Widget cmd p Footer ClearCompleted
+todoFooter :: (AsReactor cmd) => ReactId -> Widget cmd p Footer (ClearCompleted ())
 todoFooter ri =
     let win = todoDisplay ri
-        gad = trigger_ ri _always "onClick" ClearCompleted
+        gad = trigger_ ri _always "onClick" $ Tagged @"ClearCompleted" ()
     in (display win) `also` (lift gad)
