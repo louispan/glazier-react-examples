@@ -21,11 +21,13 @@ module Todo.App where
 import Control.Lens
 import Control.Lens.Misc
 import Control.Monad
+import qualified Control.Monad.ListM as LM
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
 import Data.Diverse.Lens
 import Data.Diverse.Profunctor
 import qualified Data.DList as DL
+import Data.Foldable
 import qualified Data.JSString as J
 import qualified Data.Map.Strict as M
 import Data.Monoid
@@ -193,6 +195,37 @@ app =
                             todoFooterWin
             in definitely $ display win
 
+app' :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+    => Widget cmd p (App Subject) (Which '[NewTodo J.JSString])
+app' = app >>= (injectedK $ definitely . finish . hdlAppChanged)
+  where
+    hdlAppChanged :: AsReactor cmd => Which '[CompleteAll (), TD.ClearCompleted ()] -> Widget cmd p (App Subject) ()
+    hdlAppChanged _ = lift $ updateFooter
+
+app'' :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+    => Widget cmd p (App Subject) (Which '[])
+app'' = app' >>= (lift . insertTodo' . obvious)
+
+updateFooter :: AsReactor cmd => Gadget cmd p (App Subject) ()
+updateFooter = tickScene $ do
+    xs <- use (_model._todos.W._rawCollection.to toList)
+    let isActive sbj = do
+            td <- doReadIORef (sceneRef sbj)
+            pure $ td ^. _model.TD._completed
+    (completed, active) <- lift $ LM.partitionM isActive xs
+    (_model._footer.TD._activeCount) .= length active
+    (_model._footer.TD._completedCount) .= length @[] completed
+
+destroyTodo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+    => TD.TodoDestroy W.UKey -> Gadget cmd p (App Subject) ()
+destroyTodo (untag @"TodoDestroy" -> k) = do
+    tickScene . zoom (editSceneModel _todos) . void . runMaybeT $ W.deleteDynamicCollectionItem todoFilterer todoSorter k
+    updateFooter
+
+todoToggleCompleted :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+    => TD.TodoToggleComplete W.UKey -> Gadget cmd p (App Subject) ()
+todoToggleCompleted (untag @"TodoToggleComplete" -> _) = updateFooter
+
 insertTodo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
     => NewTodo J.JSString -> Gadget cmd p (App Subject) (Which '[TD.TodoToggleComplete W.UKey, TD.TodoDestroy W.UKey])
 insertTodo (untag @"NewTodo" -> n) = do
@@ -201,30 +234,18 @@ insertTodo (untag @"NewTodo" -> n) = do
         k' = case mk of
             Just (k, _) -> W.largerUKey k
             Nothing -> W.zeroUKey
-    withMkSubject (go k' <$> TD.todo) (TD.Todo n False False) $ \sbj ->
+    withMkSubject (go k' <$> TD.todo) (TD.Todo n False False) $ \sbj -> do
         tickScene . zoom (editSceneModel _todos) $ W.insertDynamicCollectionItem todoFilterer todoSorter k' sbj
+        updateFooter
   where
     go :: W.UKey -> Which '[TD.TodoToggleComplete (), TD.TodoDestroy ()] -> Which '[TD.TodoToggleComplete W.UKey, TD.TodoDestroy W.UKey]
     go k y = afmap (CaseFunc1 @NoConstraint @Functor @NoConstraint (fmap (const k))) y
 
-destroyTodo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => TD.TodoDestroy W.UKey -> Gadget cmd p (App Subject) ()
-destroyTodo (untag @"TodoDestroy" -> k) =
-    tickScene . zoom (editSceneModel _todos) . void . runMaybeT $ W.deleteDynamicCollectionItem todoFilterer todoSorter k
-
--- todoToggleCompleted :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
---     => TD.TodoToggleComplete W.UKey -> Gadget cmd p (App Subject) ()
--- todoToggleCompleted (untag @"TodoToggleComplete" -> k) =
---     tickScene $ zoom (editSceneModel _todos) $ void $ runMaybeT $ W.deleteDynamicCollectionItem todoFilterer todoSorter k
-
--- updateFooter :: Gadget cmd p (App Subject) ()
--- updateFooter = tickScene $ do
-
--- updateFooterGadget :: G.Gadget Action (Element Model Plan) (D.DList Command)
--- updateFooterGadget = do
---     (active, completed) <- use (todos . W.List.items . to (M.partition (isActiveTodo . outline)))
---     pure $ D.singleton $ SendFooterActionCommand
---                 (TD.Footer.SetCountsAction (length active) (length completed))
+insertTodo' :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+    => NewTodo J.JSString -> Gadget cmd p (App Subject) (Which '[])
+insertTodo' a = insertTodo a
+    >>= (injectedK $ definitely . finish . todoToggleCompleted . obvious)
+    >>= (injectedK $ definitely . finish . destroyTodo . obvious)
 
 -- gadget :: ReactMlT Identity () -> G.Gadget Action (Element Model Plan) (D.DList Command)
 -- gadget separator = do

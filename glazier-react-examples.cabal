@@ -38,6 +38,7 @@ executable glazier-react-todo
                      , javascript-extras >= 0.4
                      , lens >= 4
                      , lens-misc >= 0.0.1
+                     , monadlist >= 0.0.2
                     --  , mmorph >= 1
                      , mtl >= 2
                     --  , parameterized >= 0.5.0.0
