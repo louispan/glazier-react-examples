@@ -26,7 +26,7 @@ executable glazier-react-todo
   build-depends:       base >= 4.7 && < 5
                      , alternators >= 1.0
                      , containers >= 0.5
-                     , data-diverse >= 4.1.1
+                     , data-diverse >= 4.2
                      , data-diverse-lens >= 4.2.0.1
                      , deepseq >= 1.4
                      , disposable >= 0.3

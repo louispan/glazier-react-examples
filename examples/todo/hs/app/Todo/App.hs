@@ -3,7 +3,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 -- {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
--- {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 -- {-# LANGUAGE FunctionalDependencies #-}
 -- {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedLists #-}
@@ -14,6 +14,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Todo.App where
 
@@ -30,6 +31,7 @@ import qualified Data.Map.Strict as M
 import Data.Monoid
 import Data.Proxy
 import Data.Semigroup.Applicative
+import Data.Tagged
 import qualified GHC.Generics as G
 import Glazier.React
 import Glazier.React.Action.KeyDownKey
@@ -76,14 +78,15 @@ data App f = App
     { newTodo :: J.JSString
     , todos :: TodoCollection f
     , footer :: TD.Footer
+    , reservedUKeys :: [W.UKey]
     } deriving (G.Generic)
 
 makeLenses_ ''App
 
-newtype NewTodo = NewTodo J.JSString
+type NewTodo = Tagged "NewTodo"
 
 newTodoInput :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => ReactId -> Widget cmd p J.JSString NewTodo
+    => ReactId -> Widget cmd p J.JSString (NewTodo J.JSString)
 newTodoInput ri =
     let wid = finish . void . overWindow fw $ W.textInput ri
     in wid `also` lift gad
@@ -96,7 +99,7 @@ newTodoInput ri =
     hdlBlur :: AsReactor cmd => Gadget cmd p J.JSString ()
     hdlBlur = tickScene $ _model %= J.strip
 
-    hdlKeyDown :: (AsReactor cmd, AsHTMLElement cmd) => KeyDownKey -> Gadget cmd p J.JSString NewTodo
+    hdlKeyDown :: (AsReactor cmd, AsHTMLElement cmd) => KeyDownKey -> Gadget cmd p J.JSString (NewTodo J.JSString)
     hdlKeyDown (KeyDownKey _ key) =
         case key of
             -- NB. Enter and Escape doesn't generate a onChange event
@@ -108,7 +111,7 @@ newTodoInput ri =
                 _model .= J.empty
                 pure $ if J.null v'
                     then finish $ pure ()
-                    else pure $ NewTodo v'
+                    else pure $ Tagged @"NewTodo" v'
 
             "Escape" -> finish $ blurElement ri -- The onBlur handler will trim the value
 
@@ -123,10 +126,10 @@ newTodoInput ri =
 -- newTodoInput' = magnifyPrototype _newTodo newTodoInput
     -- & enlargeModel _newTodo
 
-data AppCompleteAll = AppCompleteAll
+type CompleteAll = Tagged "CompleteAll"
 
 appCompleteAll :: (AsReactor cmd)
-    => ReactId -> Widget cmd p (TodoCollection Subject) AppCompleteAll
+    => ReactId -> Widget cmd p (TodoCollection Subject) (CompleteAll ())
 appCompleteAll ri =
     let win = do
             scn <- ask
@@ -149,17 +152,17 @@ appCompleteAll ri =
             scn <- doReadIORef $ sceneRef sbj
             pure $ Any $ scn ^. _model.TD._completed
 
-    hdlChange :: AsReactor cmd => Gadget cmd p (TodoCollection Subject) AppCompleteAll
+    hdlChange :: AsReactor cmd => Gadget cmd p (TodoCollection Subject) (CompleteAll ())
     hdlChange = do
         trigger_ ri _always "onChange" ()
         scn <- getScene
         getAls $ foldMap (\sbj -> Als $ lift $ gadgetWith sbj
                 (tickScene $ (_model.TD._completed) .= True))
             (view (_model.W._rawCollection) scn)
-        pure AppCompleteAll
+        pure $ Tagged @"CompleteAll" ()
 
 app :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => Widget cmd p (App Subject) (Which '[NewTodo, AppCompleteAll, TD.ClearCompleted ()])
+    => Widget cmd p (App Subject) (Which '[NewTodo J.JSString, CompleteAll (), TD.ClearCompleted ()])
 app =
     let newTodo' = pickOnly <$> (magnifyWidget _newTodo $ mkReactId "new-todo" >>= newTodoInput)
         appCompleteAll' = pickOnly <$> (magnifyWidget _todos $ mkReactId "complete-all" >>= appCompleteAll)
@@ -191,17 +194,21 @@ app =
             in definitely $ display win
 
 insertTodo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => NewTodo -> Gadget cmd p (App Subject) (Which '[TD.TodoToggleComplete (), TD.TodoDestroy ()])
-insertTodo (NewTodo n) = withMkSubject TD.todo (TD.Todo n False False) $ \sbj ->
-    tickScene $ do
-        mk <- use (_model._todos.W._rawCollection.to M.lookupMax)
-        let k' = case mk of
-                Just (k, _) -> W.largerUKey k
-                Nothing -> W.zeroUKey
-        zoom (editSceneModel _todos) $ W.insertDynamicCollectionItem todoFilterer todoSorter k' sbj
+    => NewTodo J.JSString -> Gadget cmd p (App Subject) (Which '[TD.TodoToggleComplete W.UKey, TD.TodoDestroy W.UKey])
+insertTodo (untag @"NewTodo" -> n) = do
+    scn <- getScene
+    let mk = view (_model._todos.W._rawCollection.to M.lookupMax) scn
+        k' = case mk of
+            Just (k, _) -> W.largerUKey k
+            Nothing -> W.zeroUKey
+    withMkSubject (go k' <$> TD.todo) (TD.Todo n False False) $ \sbj ->
+        tickScene $ zoom (editSceneModel _todos) $ W.insertDynamicCollectionItem todoFilterer todoSorter k' sbj
+  where
+    go :: W.UKey -> Which '[TD.TodoToggleComplete (), TD.TodoDestroy ()] -> Which '[TD.TodoToggleComplete W.UKey, TD.TodoDestroy W.UKey]
+    go k y = afmap (CaseFunc1 @NoConstraint @Functor @NoConstraint (fmap (const k))) y
 
-wack :: Int -> Int
-wack = \(a :: Int) -> a
+
+-- newtype CaseFunc1 (k :: Type -> Constraint) r (xs :: [Type]) = CaseFunc (forall x. k x => x -> r)
 
 -- destroyTodo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
 --     => TD.TodoDestroy -> Gadget cmd p (App Subject) (Which '[TD.TodoToggleComplete, TD.TodoDestroy])
