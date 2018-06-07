@@ -202,16 +202,23 @@ insertTodo (untag @"NewTodo" -> n) = do
             Just (k, _) -> W.largerUKey k
             Nothing -> W.zeroUKey
     withMkSubject (go k' <$> TD.todo) (TD.Todo n False False) $ \sbj ->
-        tickScene $ zoom (editSceneModel _todos) $ W.insertDynamicCollectionItem todoFilterer todoSorter k' sbj
+        tickScene . zoom (editSceneModel _todos) $ W.insertDynamicCollectionItem todoFilterer todoSorter k' sbj
   where
     go :: W.UKey -> Which '[TD.TodoToggleComplete (), TD.TodoDestroy ()] -> Which '[TD.TodoToggleComplete W.UKey, TD.TodoDestroy W.UKey]
     go k y = afmap (CaseFunc1 @NoConstraint @Functor @NoConstraint (fmap (const k))) y
 
+destroyTodo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+    => TD.TodoDestroy W.UKey -> Gadget cmd p (App Subject) ()
+destroyTodo (untag @"TodoDestroy" -> k) =
+    tickScene . zoom (editSceneModel _todos) . void . runMaybeT $ W.deleteDynamicCollectionItem todoFilterer todoSorter k
 
--- newtype CaseFunc1 (k :: Type -> Constraint) r (xs :: [Type]) = CaseFunc (forall x. k x => x -> r)
+-- todoToggleCompleted :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+--     => TD.TodoToggleComplete W.UKey -> Gadget cmd p (App Subject) ()
+-- todoToggleCompleted (untag @"TodoToggleComplete" -> k) =
+--     tickScene $ zoom (editSceneModel _todos) $ void $ runMaybeT $ W.deleteDynamicCollectionItem todoFilterer todoSorter k
 
--- destroyTodo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
---     => TD.TodoDestroy -> Gadget cmd p (App Subject) (Which '[TD.TodoToggleComplete, TD.TodoDestroy])
+-- updateFooter :: Gadget cmd p (App Subject) ()
+-- updateFooter = tickScene $ do
 
 -- updateFooterGadget :: G.Gadget Action (Element Model Plan) (D.DList Command)
 -- updateFooterGadget = do
