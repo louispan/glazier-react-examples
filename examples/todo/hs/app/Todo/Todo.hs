@@ -7,14 +7,15 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Todo.Todo
     ( Todo(..)
     , _value
     , _completed
     , _editing
-    , TodoDestroy
-    , TodoToggleComplete
+    , OnTodoDestroy
+    , OnTodoToggleComplete
     , todo
     ) where
 
@@ -40,35 +41,35 @@ data Todo = Todo
 
 makeLenses_ ''Todo
 
-type TodoDestroy = Tagged "TodoDestroy"
-type TodoToggleComplete = Tagged "TodoToggleComplete"
-type TodoStartEdit = Tagged "TodoStartEdit"
+type OnTodoDestroy = Tagged "OnTodoDestroy"
+type OnTodoToggleComplete = Tagged "OnTodoToggleComplete"
+type OnTodoStartEdit = Tagged "OnTodoStartEdit"
 
-todoToggleComplete :: (AsReactor cmd) => ReactId -> Widget cmd p Todo (TodoToggleComplete ())
+todoToggleComplete :: (AsReactor cmd) => ReactId -> Widget cmd p Todo (OnTodoToggleComplete ())
 todoToggleComplete ri =
-    let wid = (retag @"InputChange" @_ @"TodoToggleComplete") <$> overWindow fw (W.checkboxInput ri)
+    let wid = (retag @"InputChange" @_ @"OnTodoToggleComplete") <$> overWindow fw (W.checkboxInput ri)
     in magnifyWidget _completed wid
   where
     fw = (*> modify' (overSurfaceProperties (`DL.snoc` ("className", "toggle"))))
 
-todoDestroy :: (AsReactor cmd) => ReactId -> Widget cmd p s (TodoDestroy ())
+todoDestroy :: (AsReactor cmd) => ReactId -> Widget cmd p s (OnTodoDestroy ())
 todoDestroy ri =
     let win = lf' ri "button"
             [ ("key", "destroy")
             , ("className", "destroy")]
-        gad = trigger_ ri "onClick" (Tagged @"TodoDestroy" ())
+        gad = trigger_ ri "onClick" (Tagged @"OnTodoDestroy" ())
     in (display win) `also` (lift gad)
 
-todoLabel :: (AsReactor cmd) => ReactId -> Widget cmd p Todo (TodoStartEdit ())
+todoLabel :: (AsReactor cmd) => ReactId -> Widget cmd p Todo (OnTodoStartEdit ())
 todoLabel ri =
     let win = do
             str <- view (_model._value)
             bh' ri "label" [("key", "label")] $
                 txt str
-        gad = trigger_ ri "onDoubleClick" (Tagged @"TodoStartEdit" ())
+        gad = trigger_ ri "onDoubleClick" (Tagged @"OnTodoStartEdit" ())
     in (display win) `also` (lift gad)
 
-todoView :: (AsReactor cmd) => Widget cmd p Todo (Which '[TodoToggleComplete (), TodoDestroy (), TodoStartEdit ()])
+todoView :: (AsReactor cmd) => Widget cmd p Todo (Which '[OnTodoToggleComplete (), OnTodoDestroy (), OnTodoStartEdit ()])
 todoView =
     let todoToggleComplete' = mkReactId "toggle" >>= todoToggleComplete
         todoDestroy' = mkReactId "destroy" >>= todoDestroy
@@ -81,7 +82,7 @@ todoView =
                 , ("className", "view")]
     in overWindow fw wid
 
-todoInput :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd) => ReactId -> Widget cmd p Todo (TodoDestroy ())
+todoInput :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd) => ReactId -> Widget cmd p Todo (OnTodoDestroy ())
 todoInput ri =
     let wid = overWindow fw . magnifyWidget _value $ W.textInput ri
         wid' = finish (void wid) `also` lift gad
@@ -102,7 +103,7 @@ todoInput ri =
             _model._editing .= False
             _model._value %= J.strip
 
-    hdlKeyDown :: (AsReactor cmd, AsHTMLElement cmd) => Gadget cmd p Todo (TodoDestroy ())
+    hdlKeyDown :: (AsReactor cmd, AsHTMLElement cmd) => Gadget cmd p Todo (OnTodoDestroy ())
     hdlKeyDown = do
         (KeyDownKey _ key) <- trigger' ri "onKeyDown" fireKeyDownKey
         case key of
@@ -114,7 +115,7 @@ todoInput ri =
                 let v' = J.strip v
                 if J.null v'
                     then
-                        pure $ pure $ Tagged @"TodoDestroy" ()
+                        pure $ pure $ Tagged @"OnTodoDestroy" ()
                     else do
                         _model._editing .= False
                         _model._value .= v'
@@ -125,7 +126,7 @@ todoInput ri =
             _ -> finish $ pure ()
 
 todo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => Widget cmd p Todo (Which '[TodoToggleComplete (), TodoDestroy ()])
+    => Widget cmd p Todo (Which '[OnTodoToggleComplete (), OnTodoDestroy ()])
 todo = do
     ri <- mkReactId "input"
     let todoInput' = todoInput ri
@@ -143,8 +144,8 @@ todo = do
             win
 
     hdlStartEdit :: (AsHTMLElement cmd, AsReactor cmd)
-        => ReactId -> TodoStartEdit () -> Gadget cmd p Todo ()
-    hdlStartEdit ri _ = tickSceneThen . (`evalMaybeT` (pure ())) $ do
+        => ReactId -> OnTodoStartEdit () -> Gadget cmd p Todo ()
+    hdlStartEdit ri (untag @"OnTodoStartEdit" -> _) = tickSceneThen . (`evalMaybeT` (pure ())) $ do
             -- don't allow editing of completed todos
             b <- use (_model._completed)
             guard (not b)

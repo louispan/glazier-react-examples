@@ -96,7 +96,7 @@ todoFooter j ri =
 
 hdlClearCompleted :: (AsReactor cmd) => ReactId -> Gadget cmd p (TodoCollection Subject) ()
 hdlClearCompleted ri = do
-    trigger_ ri "onClick" $ Tagged @"ClearCompleted" ()
+    trigger_ ri "onClick" ()
     tickScene $ do
         xs <- use (_model.W._rawCollection.to M.toList)
         xs' <- lift $ LM.filterMP (ftr . snd) xs

@@ -64,10 +64,10 @@ data App f = App
 
 makeLenses_ ''App
 
-type NewTodo = Tagged "NewTodo"
+type OnNewTodo = Tagged "OnNewTodo"
 
 newTodoInput :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => ReactId -> Widget cmd p J.JSString (NewTodo J.JSString)
+    => ReactId -> Widget cmd p J.JSString (OnNewTodo J.JSString)
 newTodoInput ri =
     let wid = finish . void . overWindow fw $ W.textInput ri
     in wid `also` lift gad
@@ -80,7 +80,7 @@ newTodoInput ri =
     hdlBlur :: AsReactor cmd => Gadget cmd p J.JSString ()
     hdlBlur = tickScene $ _model %= J.strip
 
-    hdlKeyDown :: (AsReactor cmd, AsHTMLElement cmd) => KeyDownKey -> Gadget cmd p J.JSString (NewTodo J.JSString)
+    hdlKeyDown :: (AsReactor cmd, AsHTMLElement cmd) => KeyDownKey -> Gadget cmd p J.JSString (OnNewTodo J.JSString)
     hdlKeyDown (KeyDownKey _ key) =
         case key of
             -- NB. Enter and Escape doesn't generate a onChange event
@@ -92,7 +92,7 @@ newTodoInput ri =
                 _model .= J.empty
                 pure $ if J.null v'
                     then finish $ pure ()
-                    else pure $ Tagged @"NewTodo" v'
+                    else pure $ Tagged @"OnNewTodo" v'
 
             "Escape" -> finish $ blurElement ri -- The onBlur handler will trim the value
 
@@ -131,7 +131,7 @@ appToggleCompleteAll ri =
             (view (_model.W._visibleList) scn) -- Only modify visible!
 
 app_ :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => JE.JSRep -> Widget cmd p (App Subject) (NewTodo J.JSString)
+    => JE.JSRep -> Widget cmd p (App Subject) (OnNewTodo J.JSString)
 app_ j =
     let newTodo' = magnifyWidget _newTodo $ mkReactId "new-todo" >>= newTodoInput
         appToggleCompleteAll' = magnifyWidget _todos $ mkReactId "complete-all" >>= appToggleCompleteAll
@@ -168,17 +168,17 @@ app j = app_ j
     >>= (lift . insertTodo')
 
 todoToggleCompleted :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => TD.TodoToggleComplete W.UKey -> Gadget cmd p (App Subject) ()
-todoToggleCompleted (untag @"TodoToggleComplete" -> _) = rerender
+    => TD.OnTodoToggleComplete W.UKey -> Gadget cmd p (App Subject) ()
+todoToggleCompleted (untag @"OnTodoToggleComplete" -> _) = rerender
 
 destroyTodo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => TD.TodoDestroy W.UKey -> Gadget cmd p (App Subject) ()
-destroyTodo (untag @"TodoDestroy" -> k) = do
+    => TD.OnTodoDestroy W.UKey -> Gadget cmd p (App Subject) ()
+destroyTodo (untag @"OnTodoDestroy" -> k) = do
     tickScene $ zoom (editSceneModel _todos) . void . runMaybeT $ W.deleteDynamicCollectionItem todoFilterer todoSorter k
 
 insertTodo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => NewTodo J.JSString -> Gadget cmd p (App Subject) (Which '[TD.TodoToggleComplete W.UKey, TD.TodoDestroy W.UKey])
-insertTodo (untag @"NewTodo" -> n) = do
+    => OnNewTodo J.JSString -> Gadget cmd p (App Subject) (Which '[TD.OnTodoToggleComplete W.UKey, TD.OnTodoDestroy W.UKey])
+insertTodo (untag @"OnNewTodo" -> n) = do
     scn <- getScene
     let mk = view (_model._todos.W._rawCollection.to M.lookupMax) scn
         k' = case mk of
@@ -187,11 +187,11 @@ insertTodo (untag @"NewTodo" -> n) = do
     withMkSubject (go k' <$> TD.todo) (TD.Todo n False False) $ \sbj -> do
         tickScene $ zoom (editSceneModel _todos) $ W.insertDynamicCollectionItem todoFilterer todoSorter k' sbj
   where
-    go :: W.UKey -> Which '[TD.TodoToggleComplete (), TD.TodoDestroy ()] -> Which '[TD.TodoToggleComplete W.UKey, TD.TodoDestroy W.UKey]
+    go :: W.UKey -> Which '[TD.OnTodoToggleComplete (), TD.OnTodoDestroy ()] -> Which '[TD.OnTodoToggleComplete W.UKey, TD.OnTodoDestroy W.UKey]
     go k y = afmap (CaseFunc1 @C0 @Functor @C0 (fmap (const k))) y
 
 insertTodo' :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => NewTodo J.JSString -> Gadget cmd p (App Subject) r
+    => OnNewTodo J.JSString -> Gadget cmd p (App Subject) r
 insertTodo' a = insertTodo a
     >>= (injectedK $ definitely . finish . todoToggleCompleted . obvious)
     >>= (injectedK $ definitely . finish . destroyTodo . obvious)
