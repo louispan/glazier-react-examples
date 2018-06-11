@@ -16,50 +16,38 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Todo.Footer
-    ( Footer(..)
-    , _activeCount
-    , _completedCount
-    , _currentFilter
-    -- , hdlSetFilter
-    -- , hdlSetCounts
-    , ClearCompleted
+    ( TodoCollection
     , todoFooter
     ) where
 
 import Control.Lens
-import Control.Lens.Misc
+import qualified Control.Monad.ListM as LM
+import Data.Foldable
 import qualified Data.JSString as J
+import qualified Data.Map.Strict as M
 import Data.Tagged
-import qualified GHC.Generics as G
 import Glazier.React
+import qualified Glazier.React.Widgets.Collection.Dynamic as W
 import qualified JavaScript.Extras as JE
 import qualified Todo.Filter as TD
+import qualified Todo.Todo as TD
 
-data Footer = Footer
-    { activeCount :: Int
-    , completedCount :: Int
-    , currentFilter :: TD.Filter
-    } deriving (Show, Eq, Ord, G.Generic)
+type TodoCollection f = W.DynamicCollection TD.Filter () W.UKey TD.Todo f
 
-makeLenses_ ''Footer
-
--- hdlSetFilter :: AsReactor cmd => TD.Filter -> Gadget cmd p Footer ()
--- hdlSetFilter fltr = tickScene $  _model._currentFilter .= fltr
-
-
--- hdlSetCounts :: AsReactor cmd => (Int, Int) -> Gadget cmd p Footer ()
--- hdlSetCounts (activeCnt, completedCnt) = tickScene $ do
---     _model._activeCount .= activeCnt
---     _model._completedCount .= completedCnt
-
-todoDisplay :: ReactId -> Window Footer ()
+todoDisplay :: ReactId -> Window (TodoCollection Subject) ()
 todoDisplay ri = do
     s <- ask
+    let xs = s ^. (_model.W._rawCollection.to toList)
+        isActive sbj = do
+            td <- doReadIORef (sceneRef sbj)
+            pure $ td ^. _model.TD._completed
+    (completed, active) <- lift $ LM.partitionM isActive xs
+    let completedCount = length @[] completed
+        activeCount = length active
     bh "footer" [("className", "footer")] $ do
         bh "span" [ ("className", "todo-count")
                     , ("key", "todo-count")] $ do
-            bh "strong" [("key", "items")]
-                (s ^. _model._activeCount . to show . to J.pack . to txt)
+            bh "strong" [("key", "items")] (txt $ J.pack $ show activeCount)
             txt " items left"
         bh "ul" [("className", "filters")
                   , ("key", "filters")] $ do
@@ -68,7 +56,7 @@ todoDisplay ri = do
                          , ("key", "all")
                          , ("className", JE.classNames
                             [("selected"
-                            , s ^. _model._currentFilter == TD.All)])
+                            , s ^. _model.W._filterCriteria == TD.All)])
                          ] $
                 txt "All"
             txt " "
@@ -78,7 +66,7 @@ todoDisplay ri = do
                 , ("key", "active")
                 , ("className", JE.classNames
                     [("selected"
-                    , s ^. _model._currentFilter == TD.Active)])
+                    , s ^. _model.W._filterCriteria == TD.Active)])
                 ] $
                 txt "Active"
             txt " "
@@ -88,19 +76,58 @@ todoDisplay ri = do
                     , ("key", "completed")
                     , ("className", JE.classNames
                         [("selected"
-                        , s ^. _model._currentFilter == TD.Completed)])
+                        , s ^. _model.W._filterCriteria == TD.Completed)])
                     ] $
                     txt "Completed"
-        if (s ^. _model._completedCount > 0)
+        if (completedCount > 0)
            then bh' ri "button"
                     [("key", "clear-completed"), ("className", "clear-completed")] $
                     txt "Clear completed"
            else alsoZero
 
-type ClearCompleted = Tagged "ClearCompleted"
-
-todoFooter :: (AsReactor cmd) => ReactId -> Widget cmd p Footer (ClearCompleted ())
-todoFooter ri =
+-- | The 'JE.JSRep' arg should be @document.defaultView@ or @window@
+todoFooter :: (AsReactor cmd) => JE.JSRep -> ReactId -> Widget cmd p (TodoCollection Subject) r
+todoFooter j ri =
     let win = todoDisplay ri
-        gad = trigger_ ri _always "onClick" $ Tagged @"ClearCompleted" ()
+        gad = (finish $ hdlHashChange j)
+            `also` (finish $ hdlClearCompleted ri)
     in (display win) `also` (lift gad)
+  where
+
+hdlClearCompleted :: (AsReactor cmd) => ReactId -> Gadget cmd p (TodoCollection Subject) ()
+hdlClearCompleted ri = do
+    trigger_ ri "onClick" $ Tagged @"ClearCompleted" ()
+    tickScene $ do
+        xs <- use (_model.W._rawCollection.to M.toList)
+        xs' <- lift $ LM.filterMP (ftr . snd) xs
+        _model.W._rawCollection .= (M.fromList xs')
+        ys <- use (_model.W._visibleList)
+        ys' <- lift $ LM.filterMP ftr ys
+        _model.W._visibleList .= ys'
+  where
+    ftr x = do
+        x' <- doReadIORef $ sceneRef x
+        pure $ x' ^. _model.TD._completed.to not
+
+hdlHashChange :: (AsReactor cmd) => JE.JSRep -> Gadget cmd p (TodoCollection Subject) ()
+hdlHashChange j = do
+    ftr <- mapHashChange <$> domTrigger j "onHashChange" whenHashChange
+    tickScene $  _model.W._filterCriteria .= ftr
+
+-- | Provide split up parts of onHashChange in case the applications
+-- needs to combine other widgets that also uses hashchange event
+whenHashChange :: JE.JSRep -> MaybeT IO J.JSString
+whenHashChange evt = do
+    newURL <- MaybeT (JE.fromJSR <$> JE.getProperty evt "newURL")
+    let (_, newHash) = J.breakOn "#" newURL
+    pure newHash
+
+-- | Provide split up parts of onHashChange in case the applications
+-- needs to combine other widgets that also uses hashchange event
+mapHashChange :: J.JSString -> TD.Filter
+mapHashChange newHash =
+    case newHash of
+        "#/active" -> TD.Active
+        "#/completed" -> TD.Completed
+        _ -> TD.All
+

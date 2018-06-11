@@ -21,17 +21,14 @@ module Todo.App where
 import Control.Lens
 import Control.Lens.Misc
 import Control.Monad
-import qualified Control.Monad.ListM as LM
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
-import Data.Diverse.Lens
 import Data.Diverse.Profunctor
 import qualified Data.DList as DL
-import Data.Foldable
 import qualified Data.JSString as J
 import qualified Data.Map.Strict as M
 import Data.Monoid
-import Data.Proxy
+-- import Data.Proxy
 import Data.Semigroup.Applicative
 import Data.Tagged
 import qualified GHC.Generics as G
@@ -46,23 +43,6 @@ import qualified Todo.Filter as TD
 import qualified Todo.Footer as TD
 import qualified Todo.Todo as TD
 
--- data Command
---     = RenderCommand (Element Model Plan) [JE.Property] J.JSVal
---     | SendTodosActionsCommand [W.List.Action TodosKey TD.Todo.Widget]
---     | SendFooterActionCommand TD.Footer.Action
---     | InputCommand G.Property.Command
---     | TodosCommand (W.List.Command TodosKey TD.Todo.Widget)
---     | FooterCommand TD.Footer.Command
-
--- data Action
---     = ComponentRefAction J.JSVal
---     | RenderAction
---     | ToggleAppCompleteAllAction
---     | InputAction W.Input.Action
---     | TodosAction (W.List.Action TodosKey TD.Todo.Widget)
---     | FooterAction TD.Footer.Action
-
-type TodoCollection f = W.DynamicCollection TD.Filter () W.UKey TD.Todo f
 
 -- | Just use map order
 todoSorter :: Applicative m => srt -> a -> a -> m Ordering
@@ -78,8 +58,7 @@ todoFilterer ftr td = do
 
 data App f = App
     { newTodo :: J.JSString
-    , todos :: TodoCollection f
-    , footer :: TD.Footer
+    , todos :: TD.TodoCollection f
     , reservedUKeys :: [W.UKey]
     } deriving (G.Generic)
 
@@ -94,8 +73,8 @@ newTodoInput ri =
     in wid `also` lift gad
   where
     fw = (*> modify' (overSurfaceProperties (`DL.snoc` ("className", "new-todo"))))
-    gad = (finish $ trigger_ ri _always "onBlur" () *> hdlBlur)
-        `also` (trigger' ri _always "onKeyDown" fireKeyDownKey
+    gad = (finish $ trigger_ ri "onBlur" () *> hdlBlur)
+        `also` (trigger' ri "onKeyDown" fireKeyDownKey
             >>= hdlKeyDown)
 
     hdlBlur :: AsReactor cmd => Gadget cmd p J.JSString ()
@@ -119,28 +98,17 @@ newTodoInput ri =
 
             _ -> finish $ pure ()
 
--- newTodoInput' ::
---     ( MonadReactor m
---     , MonadJS m
---     , MonadHTMLElement m
---     )
---     => Prototype p (App ('Spec m)) m NewTodo
--- newTodoInput' = magnifyPrototype _newTodo newTodoInput
-    -- & enlargeModel _newTodo
-
-type CompleteAll = Tagged "CompleteAll"
-
-appCompleteAll :: (AsReactor cmd)
-    => ReactId -> Widget cmd p (TodoCollection Subject) (CompleteAll ())
-appCompleteAll ri =
+appToggleCompleteAll :: (AsReactor cmd)
+    => ReactId -> Widget cmd p (TD.TodoCollection Subject) r
+appToggleCompleteAll ri =
     let win = do
             scn <- ask
             ps' <- lift $ ps scn
             lf' ri "input" (DL.fromList ps')
-        gad = (finish $ hdlElementalRef ri) `also` hdlChange
+        gad = (finish $ onElementalRef ri) `also` (finish $ hdlChange)
     in (display win) `also` (lift gad)
   where
-    ps :: Scene (TodoCollection Subject) -> ReadIORef [JE.Property]
+    ps :: Scene (TD.TodoCollection Subject) -> ReadIORef [JE.Property]
     ps scn = traverse sequenceA
         [ ("key", pure . JE.toJSR $ ri)
         , ("type", pure $ "checkbox")
@@ -154,24 +122,23 @@ appCompleteAll ri =
             scn <- doReadIORef $ sceneRef sbj
             pure $ Any $ scn ^. _model.TD._completed
 
-    hdlChange :: AsReactor cmd => Gadget cmd p (TodoCollection Subject) (CompleteAll ())
+    hdlChange :: AsReactor cmd => Gadget cmd p (TD.TodoCollection Subject) ()
     hdlChange = do
-        trigger_ ri _always "onChange" ()
+        trigger_ ri "onChange" ()
         scn <- getScene
         getAls $ foldMap (\sbj -> Als $ lift $ gadgetWith sbj
-                (tickScene $ (_model.TD._completed) .= True))
-            (view (_model.W._rawCollection) scn)
-        pure $ Tagged @"CompleteAll" ()
+                (tickScene $ (_model.TD._completed) %= not))
+            (view (_model.W._visibleList) scn) -- Only modify visible!
 
-app :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => Widget cmd p (App Subject) (Which '[NewTodo J.JSString, CompleteAll (), TD.ClearCompleted ()])
-app =
-    let newTodo' = pickOnly <$> (magnifyWidget _newTodo $ mkReactId "new-todo" >>= newTodoInput)
-        appCompleteAll' = pickOnly <$> (magnifyWidget _todos $ mkReactId "complete-all" >>= appCompleteAll)
-        todoFooter' = pickOnly <$> (magnifyWidget _footer $ mkReactId "todo-footer" >>= TD.todoFooter)
-    in withWindow' newTodo' $ \newTodoWin ->
-        withWindow' appCompleteAll' $ \appCompleteAllWin ->
-        withWindow' todoFooter' $ \todoFooterWin ->
+app_ :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+    => JE.JSRep -> Widget cmd p (App Subject) (NewTodo J.JSString)
+app_ j =
+    let newTodo' = magnifyWidget _newTodo $ mkReactId "new-todo" >>= newTodoInput
+        appToggleCompleteAll' = magnifyWidget _todos $ mkReactId "complete-all" >>= appToggleCompleteAll
+        todoFooter' = magnifyWidget _todos $ mkReactId "todo-footer" >>= (TD.todoFooter j)
+    in withWindow newTodo' $ \newTodoWin ->
+        withWindow appToggleCompleteAll' $ \appToggleCompleteAllWin ->
+        withWindow todoFooter' $ \todoFooterWin ->
             let win = do
                     s <- ask
                     bh "header" [("className", "header")] $ do
@@ -186,45 +153,28 @@ app =
                                                 , ("className", "main")
                                                 ] $ do
                             -- Complete all checkbox
-                            appCompleteAllWin
+                            appToggleCompleteAllWin
 
                             -- Render the list of todos
                             magnifiedScene _todos W.dynamicCollectionWindow
 
                             -- Render the footer
                             todoFooterWin
-            in definitely $ display win
+            in display win
 
-app' :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => Widget cmd p (App Subject) (Which '[NewTodo J.JSString])
-app' = app >>= (injectedK $ definitely . finish . hdlAppChanged)
-  where
-    hdlAppChanged :: AsReactor cmd => Which '[CompleteAll (), TD.ClearCompleted ()] -> Widget cmd p (App Subject) ()
-    hdlAppChanged _ = lift $ updateFooter
+app :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+    => JE.JSRep -> Widget cmd p (App Subject) r
+app j = app_ j
+    >>= (lift . insertTodo')
 
-app'' :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => Widget cmd p (App Subject) (Which '[])
-app'' = app' >>= (lift . insertTodo' . obvious)
-
-updateFooter :: AsReactor cmd => Gadget cmd p (App Subject) ()
-updateFooter = tickScene $ do
-    xs <- use (_model._todos.W._rawCollection.to toList)
-    let isActive sbj = do
-            td <- doReadIORef (sceneRef sbj)
-            pure $ td ^. _model.TD._completed
-    (completed, active) <- lift $ LM.partitionM isActive xs
-    (_model._footer.TD._activeCount) .= length active
-    (_model._footer.TD._completedCount) .= length @[] completed
+todoToggleCompleted :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+    => TD.TodoToggleComplete W.UKey -> Gadget cmd p (App Subject) ()
+todoToggleCompleted (untag @"TodoToggleComplete" -> _) = rerender
 
 destroyTodo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
     => TD.TodoDestroy W.UKey -> Gadget cmd p (App Subject) ()
 destroyTodo (untag @"TodoDestroy" -> k) = do
-    tickScene . zoom (editSceneModel _todos) . void . runMaybeT $ W.deleteDynamicCollectionItem todoFilterer todoSorter k
-    updateFooter
-
-todoToggleCompleted :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => TD.TodoToggleComplete W.UKey -> Gadget cmd p (App Subject) ()
-todoToggleCompleted (untag @"TodoToggleComplete" -> _) = updateFooter
+    tickScene $ zoom (editSceneModel _todos) . void . runMaybeT $ W.deleteDynamicCollectionItem todoFilterer todoSorter k
 
 insertTodo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
     => NewTodo J.JSString -> Gadget cmd p (App Subject) (Which '[TD.TodoToggleComplete W.UKey, TD.TodoDestroy W.UKey])
@@ -235,148 +185,15 @@ insertTodo (untag @"NewTodo" -> n) = do
             Just (k, _) -> W.largerUKey k
             Nothing -> W.zeroUKey
     withMkSubject (go k' <$> TD.todo) (TD.Todo n False False) $ \sbj -> do
-        tickScene . zoom (editSceneModel _todos) $ W.insertDynamicCollectionItem todoFilterer todoSorter k' sbj
-        updateFooter
+        tickScene $ zoom (editSceneModel _todos) $ W.insertDynamicCollectionItem todoFilterer todoSorter k' sbj
   where
     go :: W.UKey -> Which '[TD.TodoToggleComplete (), TD.TodoDestroy ()] -> Which '[TD.TodoToggleComplete W.UKey, TD.TodoDestroy W.UKey]
-    go k y = afmap (CaseFunc1 @NoConstraint @Functor @NoConstraint (fmap (const k))) y
+    go k y = afmap (CaseFunc1 @C0 @Functor @C0 (fmap (const k))) y
 
 insertTodo' :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => NewTodo J.JSString -> Gadget cmd p (App Subject) (Which '[])
+    => NewTodo J.JSString -> Gadget cmd p (App Subject) r
 insertTodo' a = insertTodo a
     >>= (injectedK $ definitely . finish . todoToggleCompleted . obvious)
     >>= (injectedK $ definitely . finish . destroyTodo . obvious)
-
--- gadget :: ReactMlT Identity () -> G.Gadget Action (Element Model Plan) (D.DList Command)
--- gadget separator = do
---     a <- askπ
---     case a of
---         ComponentRefAction node -> do
---             componentRef .= node
---             pure mempty
-
---         RenderAction ->
---             D.singleton <$> basicRenderCmd frameNum componentRef RenderCommand
-
---         ToggleAppCompleteAllAction -> do
---             s <- use (todos . W.List.items)
---             let b = hasActiveTodos s
---             let acts = M.foldMapWithKey (toggleAppCompleteAll b) s
---             pure $ D.singleton $ SendTodosActionsCommand $ D.toList $ acts `D.snoc` W.List.RenderAction
-
---         InputAction (W.Input.SubmitAction _ str) -> do
---             cmds <- inputGadget
---             let str' = J.strip str
---             cmds' <- if J.null str'
---                 then pure mempty
---                 else pure . D.singleton $ SendTodosActionsCommand [W.List.MakeItemAction
---                                                                  (+ 1)
---                                                                  (pure . toTodoModel str')
---                                                              ]
---             pure $ cmds `mappend` cmds'
-
---         InputAction _ -> inputGadget
-
---         TodosAction (W.List.ItemAction k TD.Todo.DestroyAction) -> do
---             cmds <- todosGadget separator
---             cmds' <- pure $ D.singleton $ SendTodosActionsCommand [W.List.DestroyItemAction k]
---             pure $ cmds `mappend` cmds'
-
---         TodosAction (W.List.DestroyItemAction _) -> do
---             cmds <- todosGadget separator
---             ts <- use (todos . W.List.items)
---             -- if ts is now empty, we need to render app again (to hide todo list & footer)
---             cmds' <- if null ts
---                 then D.singleton <$> basicRenderCmd frameNum componentRef RenderCommand
---                 else pure mempty
---             cmds'' <- updateFooterGadget
---             pure $ cmds `mappend` cmds' `mappend` cmds''
-
---         TodosAction (W.List.AddItemAction _ _) -> do
---             ts <- use (todos . W.List.items)
---             cmds <- todosGadget separator
---             -- if ts was empty, we need to render app again (to hide todo list & footer)
---             cmds' <- if null ts
---                 then D.singleton <$> basicRenderCmd frameNum componentRef RenderCommand
---                 else pure mempty
---             cmds'' <- updateFooterGadget
---             pure $ cmds `mappend` cmds' `mappend` cmds''
-
---         TodosAction (W.List.ItemAction _ TD.Todo.ToggleCompletedAction) -> do
---             cmds <- todosGadget separator
---             cmds' <- updateFooterGadget
---             pure $ cmds `mappend` cmds' `D.snoc` SendTodosActionsCommand [W.List.RenderAction]
-
---         TodosAction _ -> do
---             cmds <- todosGadget separator
---             cmds' <- updateFooterGadget
---             pure $ cmds `mappend` cmds'
-
---         FooterAction TD.Footer.ClearCompletedAction -> do
---             cmds <- footerGadget
---             (todos . W.List.items) %= M.filter (isActiveTodo . outline)
---             cmds' <- updateFooterGadget
---             pure $ cmds `mappend` cmds' `D.snoc` SendTodosActionsCommand [W.List.RenderAction]
-
---         FooterAction (TD.Footer.SetFilterAction _) -> do
---             cmds <- footerGadget
---             ftr <- use (footer . TD.Footer.filter)
---             let p = case ftr of
---                     TD.Filter.All -> const True
---                     TD.Filter.Active -> isActiveTodo
---                     TD.Filter.Completed -> not . isActiveTodo
---             pure $ cmds `D.snoc` SendTodosActionsCommand [W.List.SetFilterAction p]
-
---         FooterAction _ -> footerGadget
-
---   where
---     toTodoModel :: J.JSString -> TodosKey -> ModelOf TD.Todo.Widget
---     toTodoModel str _ = TD.Todo.Schema
---         str
---         False
---         False
---         False
-
---     toggleAppCompleteAll
---         :: Bool
---         -> TodosKey
---         -> ElementOf TD.Todo.Widget
---         -> D.DList (W.List.Action TodosKey TD.Todo.Widget)
---     toggleAppCompleteAll b k todoElement =
---         if todoElement ^. (TD.Todo.schema . TD.Todo.completed) /= b
---             then D.singleton $ W.List.ItemAction k (TD.Todo.SetCompletedAction b)
---             else mempty
-
--- inputGadget :: G.Gadget Action (Element Model Plan) (D.DList Command)
--- inputGadget = fmap InputCommand <$> magnify _InputAction (zoom input (W.Input.resetGadget go))
---   where
---     go ( W.Input.SubmitAction j _) = Just j
---     go ( W.Input.CancelAction j) = Just j
---     go _ = Nothing
-
--- todosGadget :: ReactMl () -> G.Gadget Action (Element Model Plan) (D.DList Command)
--- todosGadget separator = fmap TodosCommand <$> magnify _TodosAction (zoom todos
---                                                          (gadget (W.List.widget separator TD.Todo.widget)))
-
--- footerGadget :: G.Gadget Action (Element Model Plan) (D.DList Command)
--- footerGadget = fmap FooterCommand <$> magnify _FooterAction (zoom footer (gadget TD.Footer.widget))
-
-
--- -- | This needs to be explictly registered by the Main app
--- onHashChange ::  NativeEvent -> MaybeT IO [Action]
--- onHashChange = eventHandlerM whenHashChange withHashChange
-
--- whenHashChange :: NativeEvent -> MaybeT IO J.JSString
--- whenHashChange evt = do
---     hevt <- MaybeT $ pure $ toHashChangeEvent evt
---     let n = newURL hevt
---         (_, n') = J.breakOn "#" n
---     pure n'
-
--- withHashChange :: J.JSString -> TD.Filter
--- withHashChange newHash =
---     case newHash of
---         "#/active" -> TD.Active
---         "#/completed" -> TD.Completed
---         _ -> TD.All
+    & fmap impossible
 
