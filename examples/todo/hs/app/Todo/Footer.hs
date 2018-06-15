@@ -25,7 +25,6 @@ import qualified Control.Monad.ListM as LM
 import Data.Foldable
 import qualified Data.JSString as J
 import qualified Data.Map.Strict as M
-import Data.Tagged
 import Glazier.React
 import qualified Glazier.React.Widgets.Collection.Dynamic as W
 import qualified JavaScript.Extras as JE

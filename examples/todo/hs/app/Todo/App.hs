@@ -59,7 +59,6 @@ todoFilterer ftr td = do
 data App f = App
     { newTodo :: J.JSString
     , todos :: TD.TodoCollection f
-    , reservedUKeys :: [W.UKey]
     } deriving (G.Generic)
 
 makeLenses_ ''App
