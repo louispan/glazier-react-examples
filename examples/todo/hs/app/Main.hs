@@ -8,6 +8,8 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
+
 module Main (main) where
 
 -- import Control.Concurrent.STM
@@ -50,6 +52,7 @@ import qualified Data.DList as DL
 import Data.Foldable
 import Data.Proxy
 import Data.Tagged
+import qualified GHCJS.Foreign.Export as J
 import qualified GHCJS.Types as J
 import Glazier.React
 import Glazier.React.Effect.HTMLElement
@@ -83,9 +86,8 @@ instance (AsFacet a (Which (AppEffects AppCmd))) => AsFacet a AppCmd where
 instance (AsFacet a (Which (BaseAppEffects BaseAppCmd))) => AsFacet a BaseAppCmd where
     facet = iso unBaseAppCmd BaseAppCmd . facet
 
--- | This function is never run. Instead it is only used to verify that
--- BaseAppCmd fulfill all the AsFacet requirements.
--- This is verified at compile time
+-- | unused-top-binds. Howevver, it is used to verify at compile time
+-- that BaseAppCmd fulfill all the AsFacet requirements.
 verifiedApp :: JE.JSRep -> Widget BaseAppCmd p (TD.App Subject) r
 verifiedApp j = TD.app j
 
@@ -113,7 +115,6 @@ execApp ::
     ) => AppCmd -> m ()
 execApp = verifyExec unAppCmd (fixExec maybeExecApp)
 
-
 -- | 'main' is used to create React classes and setup callbacks to be used externally by the browser.
 -- GHCJS runs 'main' lazily.
 -- The code here only start running after all javascript is loaded.
@@ -138,8 +139,8 @@ main = do
     e <- toElement markup
     renderDOM e (JE.toJSR root)
 
-    -- FIXME: initial text for input
-    -- FIXME: prevent dispose
+    -- Export sbj to prevent it from being garbage collected
+    void $ J.export sbj
 
 documentDefaultView :: JE.JSRep
 documentDefaultView = JE.toJSR js_documentDefaultView
