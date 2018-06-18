@@ -17,7 +17,12 @@ For a live demo, see https://louispan.github.io/glazier-react-examples/
 ## installation
 ```
 cd examples/todo
-make start
+../../stackjs build && make start
+```
+# for minified version
+```
+cd examples/todo
+MINIFY=1 bash -c '../../stackjs build && make start'
 ```
 
 ## misc

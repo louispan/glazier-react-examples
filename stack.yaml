@@ -37,28 +37,6 @@ resolver: nightly-2018-04-21
 # will not be run. This is useful for tweaking upstream packages.
 packages:
 - '.'
-- location: '/Users/louis/repo/hs/alternators'
-  extra-dep: true
-# - location: '/Users/louis/repo/hs/arrow-extras'
-#   extra-dep: true
-- location: '/Users/louis/repo/hs/glazier'
-  extra-dep: true
-- location: '/Users/louis/repo/js/glazier-react'
-  extra-dep: true
-- location: '/Users/louis/repo/js/glazier-react-widget'
-  extra-dep: true
-- location: '/Users/louis/repo/js/javascript-extras'
-  extra-dep: true
-- location: '/Users/louis/repo/hs/disposable'
-  extra-dep: true
-- location: '/Users/louis/repo/hs/lens-misc'
-  extra-dep: true
-- location: '/Users/louis/repo/hs/data-diverse'
-  extra-dep: true
-- location: '/Users/louis/repo/hs/data-diverse-lens'
-  extra-dep: true
-- location: '/Users/louis/repo/js/ghcjs-base-stub'
-  extra-dep: true
 # - location: '/Users/louis/repo/hs/esoteric-extras'
 #   extra-dep: true
 # - location: '/Users/louis/repo/hs/parameterized'
@@ -81,6 +59,19 @@ extra-deps:
 # - unliftio-core-0.1.1.0
 # - newtype-generics-0.5.2.1
 # - async-2.2.1
+- git: git@github.com:ghcjs/ghcjs-base.git
+  commit: 4560541fbab5b77ee34d0348ec04bb1dda8e5db3
+# - '/Users/louis/repo/js/ghcjs-base'
+- '/Users/louis/repo/js/ghcjs-base-stub'
+- '/Users/louis/repo/hs/alternators'
+- '/Users/louis/repo/hs/glazier'
+- '/Users/louis/repo/js/glazier-react'
+- '/Users/louis/repo/js/glazier-react-widget'
+- '/Users/louis/repo/js/javascript-extras'
+- '/Users/louis/repo/hs/disposable'
+- '/Users/louis/repo/hs/lens-misc'
+- '/Users/louis/repo/hs/data-diverse'
+- '/Users/louis/repo/hs/data-diverse-lens'
 
 # Override default flag values for local packages and extra-deps
 flags: {}

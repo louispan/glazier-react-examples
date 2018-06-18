@@ -12,36 +12,6 @@
 
 module Main (main) where
 
--- import Control.Concurrent.STM
--- import qualified Control.Disposable as CD
--- import Control.Monad.IO.Class
--- import Control.Monad.Morph
--- import Control.Monad.State.Strict
--- import Control.Monad.Trans.Maybe
--- import Control.Monad.Trans.Reader
--- import qualified Data.JSString as J
--- import Data.Maybe
--- import qualified GHCJS.Foreign.Callback as J
--- import qualified GHCJS.Marshal.Pure as J
--- import qualified GHCJS.Types as J
--- import qualified Glazier as G
--- import Glazier.React.Maker
--- import Glazier.React.Maker.Run.Maker
--- import Glazier.React.Markup
--- import Glazier.React.Model
--- import Glazier.React.ReactDOM as RD
--- import Glazier.React.Widget
--- import Glazier.React.Widgets.Input as W.Input
--- import Glazier.React.Widgets.List as W.List
--- import qualified Pipes as P
--- import qualified Pipes.Concurrent as PC
--- import qualified Pipes.Lift as PL
--- import qualified Pipes.Misc as PM
--- import qualified Pipes.Prelude as PP
--- import qualified Todo.App.Run as TD.App
--- import qualified Todo.Filter as TD.Filter
--- import qualified Todo.Footer as TD.Footer
-
 import Control.Concurrent.MVar
 import Control.Lens
 import Control.Monad.IO.Unlift

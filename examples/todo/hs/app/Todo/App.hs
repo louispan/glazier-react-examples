@@ -71,7 +71,7 @@ newTodoInput ri =
     let wid = finish . void . overWindow fw $ W.textInput ri
     in wid `also` lift gad
   where
-    fw = (*> modify' (overSurfaceProperties
+    fw = (modifyMarkup (overSurfaceProperties
         (<> [("className", "new-todo"), ("placeholder", "What needs to be done?")])))
     gad = (finish $ trigger_ ri "onBlur" () *> hdlBlur)
         `also` (trigger' ri "onKeyDown" fireKeyDownKey

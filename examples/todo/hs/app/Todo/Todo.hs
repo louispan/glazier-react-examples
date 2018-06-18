@@ -50,7 +50,7 @@ todoToggleComplete ri =
     let wid = (retag @"InputChange" @_ @"OnTodoToggleComplete") <$> overWindow fw (W.checkboxInput ri)
     in magnifyWidget _completed wid
   where
-    fw = (*> modify' (overSurfaceProperties (`DL.snoc` ("className", "toggle"))))
+    fw = (modifyMarkup (overSurfaceProperties (`DL.snoc` ("className", "toggle"))))
 
 todoDestroy :: (AsReactor cmd) => ReactId -> Widget cmd p s (OnTodoDestroy ())
 todoDestroy ri =
@@ -88,7 +88,7 @@ todoInput ri =
         wid' = finish (void wid) `also` lift gad
     in wid'
   where
-    fw = (*> modify' (overSurfaceProperties (`DL.snoc` ("className", "edit"))))
+    fw = (modifyMarkup (overSurfaceProperties (`DL.snoc` ("className", "edit"))))
     gad = (finish hdlFocus)
         `also` (finish hdlBlur)
         `also` hdlKeyDown
