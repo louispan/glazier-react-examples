@@ -21,7 +21,7 @@ executable glazier-react-todo
                        Todo.Filter
                        Todo.Footer
   main-is:             Main.hs
-  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:         -Wall -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   cpp-options:         -DGHCJS_BROWSER
   build-depends:       base >= 4.7 && < 5
                      , alternators >= 1.0

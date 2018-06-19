@@ -167,11 +167,11 @@ app :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
 app j = app_ j
     >>= (lift . insertTodo')
 
-todoToggleCompleted :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+todoToggleCompleted :: (AsReactor cmd)
     => TD.OnTodoToggleComplete W.UKey -> Gadget cmd p (App Subject) ()
 todoToggleCompleted (untag @"OnTodoToggleComplete" -> _) = rerender
 
-destroyTodo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+destroyTodo :: (AsReactor cmd)
     => TD.OnTodoDestroy W.UKey -> Gadget cmd p (App Subject) ()
 destroyTodo (untag @"OnTodoDestroy" -> k) = do
     tickScene $ zoom (editSceneModel _todos) . void . runMaybeT $ W.deleteDynamicCollectionItem todoFilterer todoSorter k
