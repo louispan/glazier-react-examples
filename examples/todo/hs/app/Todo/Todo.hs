@@ -25,6 +25,7 @@ import Data.Diverse.Profunctor
 import qualified Data.DList as DL
 import qualified Data.JSString as J
 import Data.Tagged
+import Data.Typeable
 import qualified GHC.Generics as G
 import Glazier.React
 import Glazier.React.Action.KeyDownKey
@@ -45,7 +46,7 @@ type OnTodoDestroy = Tagged "OnTodoDestroy"
 type OnTodoToggleComplete = Tagged "OnTodoToggleComplete"
 type OnTodoStartEdit = Tagged "OnTodoStartEdit"
 
-todoToggleComplete :: (AsReactor cmd) => ReactId -> Widget cmd p Todo (OnTodoToggleComplete ())
+todoToggleComplete :: (AsReactor cmd, Typeable p) => ReactId -> Widget cmd p Todo (OnTodoToggleComplete ())
 todoToggleComplete ri =
     let wid = (retag @"InputChange" @_ @"OnTodoToggleComplete") <$> overWindow fw (W.checkboxInput ri)
     in magnifyWidget _completed wid
@@ -69,41 +70,49 @@ todoLabel ri =
         gad = trigger_ ri "onDoubleClick" (Tagged @"OnTodoStartEdit" ())
     in (display win) `also` (lift gad)
 
-todoView :: (AsReactor cmd) => Widget cmd p Todo (Which '[OnTodoToggleComplete (), OnTodoDestroy (), OnTodoStartEdit ()])
+todoView :: (AsReactor cmd, Typeable p) => Widget cmd p Todo (Which '[OnTodoToggleComplete (), OnTodoDestroy (), OnTodoStartEdit ()])
 todoView =
-    let todoToggleComplete' = mkReactId "toggle" >>= todoToggleComplete
-        todoDestroy' = mkReactId "destroy" >>= todoDestroy
-        todoLabel' = mkReactId "label" >>= todoLabel
-        wid = (pickOnly <$> todoToggleComplete')
-            & chooseWith also $ (pickOnly <$> todoDestroy')
-            & chooseWith also $ (pickOnly <$> todoLabel')
-        fw = bh "div"
-                [ ("key", "view")
-                , ("className", "view")]
-    in overWindow fw wid
+    let todoToggleComplete' = pickOnly <$> (mkReactId "toggle" >>= todoToggleComplete)
+        todoDestroy' = pickOnly <$> (mkReactId "destroy" >>= todoDestroy)
+        todoLabel' = pickOnly <$> (mkReactId "label" >>= todoLabel)
+        wid = withWindow' todoToggleComplete' $ \todoToggleCompleteWin' ->
+            withWindow' todoDestroy' $ \todoDestroyWin' ->
+            withWindow' todoLabel' $ \todoLabelWin' ->
+                definitely $ display $ bh "div"
+                    [ ("key", "view")
+                    , ("className", "view")] $
+                        todoToggleCompleteWin'
+                        *> todoLabelWin'
+                        *> todoDestroyWin'
+    in wid
 
-todoInput :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd) => ReactId -> Widget cmd p Todo (OnTodoDestroy ())
+todoInput :: (AsFacet (IO cmd) cmd, AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd, Typeable p) => ReactId -> Widget cmd p Todo (OnTodoDestroy ())
 todoInput ri =
     let wid = overWindow fw . magnifyWidget _value $ W.textInput ri
         wid' = finish (void wid) `also` lift gad
     in wid'
   where
     fw = (modifyMarkup (overSurfaceProperties (`DL.snoc` ("className", "edit"))))
-    gad = (finish hdlFocus)
-        `also` (finish hdlBlur)
+    gad = -- finish (onElementalRef ri)
+        -- `also` (finish hdlFocus)
+        (finish hdlBlur)
         `also` hdlKeyDown
 
-    hdlFocus :: AsReactor cmd => Gadget cmd p Todo ()
-    hdlFocus = trigger_ ri "onFocus" () *> tickScene (_model._editing .= True)
+    -- hdlFocus :: (AsFacet (IO cmd) cmd, AsReactor cmd, Typeable p) => Gadget cmd p Todo ()
+    -- hdlFocus = do
+    --     trigger_ ri "onFocus" ()
+    --     postCmd_ $ putStrLn "Focus!"
+    --     tickScene (_model._editing .= True)
 
-    hdlBlur :: AsReactor cmd => Gadget cmd p Todo ()
+    hdlBlur :: (AsFacet (IO cmd) cmd, AsReactor cmd, Typeable p) => Gadget cmd p Todo ()
     hdlBlur = do
         trigger_ ri "onBlur" ()
+        postCmd_ $ putStrLn "Blur!"
         tickScene $ do
             _model._editing .= False
             _model._value %= J.strip
 
-    hdlKeyDown :: (AsReactor cmd, AsHTMLElement cmd) => Gadget cmd p Todo (OnTodoDestroy ())
+    hdlKeyDown :: (AsReactor cmd, AsHTMLElement cmd, Typeable p) => Gadget cmd p Todo (OnTodoDestroy ())
     hdlKeyDown = do
         (KeyDownKey _ key) <- trigger' ri "onKeyDown" fireKeyDownKey
         case key of
@@ -125,29 +134,36 @@ todoInput ri =
 
             _ -> finish $ pure ()
 
-todo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+todo :: (AsFacet (IO cmd) cmd, AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd, Typeable p)
     => Widget cmd p Todo (Which '[OnTodoToggleComplete (), OnTodoDestroy ()])
 todo = do
     ri <- mkReactId "input"
-    let todoInput' = todoInput ri
-        wid = todoView & chooseWith also $ (pickOnly <$> todoInput')
+    let todoInput' = pickOnly <$> todoInput ri
+        -- wid = todoView & chooseWith also $ (pickOnly <$> todoInput')
+        wid = withWindow' todoView $ \todoViewWin' ->
+            withWindow' todoInput' $ \todoInputWin' ->
+                definitely $ display $ todoViewWin' *> todoInputWin'
     overWindow fw wid >>= (injectedK $ lift . definitely . finish . hdlStartEdit ri . obvious)
 
   where
     fw win = do
         s <- view _model
-        bh "div"
+        bh "li"
             [ ("className", JE.classNames
                 [ ("completed", completed s)
                 , ("editing", editing s)])
             ]
             win
 
-    hdlStartEdit :: (AsHTMLElement cmd, AsReactor cmd)
+    hdlStartEdit :: (AsFacet (IO cmd) cmd, AsHTMLElement cmd, AsReactor cmd, Typeable p)
         => ReactId -> OnTodoStartEdit () -> Gadget cmd p Todo ()
-    hdlStartEdit ri (untag @"OnTodoStartEdit" -> _) = tickSceneThen . (`evalMaybeT` (pure ())) $ do
-            -- don't allow editing of completed todos
-            b <- use (_model._completed)
-            guard (not b)
-            _model._editing .= True
-            pure $ focusElement ri
+    hdlStartEdit ri (untag @"OnTodoStartEdit" -> _) = do
+        postCmd_ $ putStrLn "DoubleClick!"
+        tickScene $ _model._editing .= True
+        onNextRendered $ focusElement ri
+            -- (`evalMaybeT` ()) $ do
+            --     v <- lift $ sequel $ postCmd' . GetProperty j "value"
+            --     (l :: Int) <- MaybeT . fmap JE.fromJSR . sequel $ postCmd' . GetProperty v "length"
+
+
+-- FIXME: Double click to edit

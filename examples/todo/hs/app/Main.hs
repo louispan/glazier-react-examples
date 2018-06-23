@@ -22,6 +22,7 @@ import qualified Data.DList as DL
 import Data.Foldable
 import Data.Proxy
 import Data.Tagged
+import Data.Typeable
 import qualified GHCJS.Foreign.Export as J
 import qualified GHCJS.Types as J
 import Glazier.React
@@ -58,8 +59,8 @@ instance (AsFacet a (Which (BaseAppEffects BaseAppCmd))) => AsFacet a BaseAppCmd
 
 -- | unused-top-binds. Howevver, it is used to verify at compile time
 -- that BaseAppCmd fulfill all the AsFacet requirements.
-verifiedApp :: JE.JSRep -> Widget BaseAppCmd p (TD.App Subject) r
-verifiedApp j = TD.app j
+-- verifiedApp :: Typeable p => JE.JSRep -> Widget BaseAppCmd p (TD.App Subject) r
+-- verifiedApp j = TD.app j
 
 maybeExecApp ::
     ( AsFacet (IO cmd) cmd
