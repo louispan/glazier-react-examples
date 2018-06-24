@@ -22,7 +22,6 @@ import Control.Lens
 import Control.Lens.Misc
 import Control.Monad
 import Control.Monad.Trans.Class
-import Control.Monad.Trans.Maybe
 import Data.Diverse.Profunctor
 import qualified Data.DList as DL
 import qualified Data.JSString as J
@@ -30,7 +29,6 @@ import qualified Data.Map.Strict as M
 import Data.Monoid
 import Data.Semigroup.Applicative
 import Data.Tagged
-import Data.Typeable
 import Debug.Trace
 import qualified GHC.Generics as G
 import Glazier.React
@@ -65,7 +63,7 @@ makeLenses_ ''App
 
 type OnNewTodo = Tagged "OnNewTodo"
 
-newTodoInput :: (AsReactor cmd, AsJavascript cmd, Typeable p)
+newTodoInput :: (AsReactor cmd, AsJavascript cmd)
     => ReactId -> Widget cmd p J.JSString (OnNewTodo J.JSString)
 newTodoInput ri =
     let wid = finish . void . overWindow fw $ W.textInput ri
@@ -78,33 +76,34 @@ newTodoInput ri =
         (trigger' ri "onKeyDown" fireKeyDownKey
             >>= hdlKeyDown)
 
-    hdlKeyDown :: (AsReactor cmd, Typeable p) => KeyDownKey -> Gadget cmd p J.JSString (OnNewTodo J.JSString)
+    hdlKeyDown :: (AsReactor cmd) => KeyDownKey -> Gadget cmd p J.JSString (OnNewTodo J.JSString)
     hdlKeyDown (KeyDownKey _ key) =
         case trace ("hdlKeyDown: " ++ show key) key of
             -- NB. Enter and Escape doesn't generate a onChange event
             -- So there is no adverse interation with W.input onChange
             -- updating the value under our feet.
-            "Enter" -> tickSceneThen $ do
-                v <- use _model
+            "Enter" -> tickModelThen $ do
+                v <- get
                 let v' = J.strip v
-                _model .= J.empty
+                id .= J.empty
                 pure $ if J.null $ trace ("entered: " ++ show v') v'
                     then finish $ pure ()
                     else pure $ Tagged @"OnNewTodo" v'
 
             -- "Escape" -> finish $ blurElement ri -- The onBlur handler will trim the value
-            "Escape" -> finish $ tickScene $ _model .=  (trace "newTodoInput hdlBlur" J.empty)
+            "Escape" -> finish $ tickModel $ id .=  (trace "newTodoInput hdlBlur" J.empty)
 
             _ -> finish $ pure ()
 
-appToggleCompleteAll :: (AsReactor cmd, Typeable p)
+appToggleCompleteAll :: (AsReactor cmd)
     => ReactId -> Widget cmd p (TD.TodoCollection Subject) r
 appToggleCompleteAll ri =
     let win = do
             scn <- ask
             props <- lift $ mkProps scn
             lf' ri "input" (DL.fromList props)
-        gad = (finish $ onElementalRef ri) `also` (finish $ hdlChange)
+        gad = -- (finish $ onElementalRef ri) `also`
+            (finish $ hdlChange)
     in (display win) `also` (lift gad)
   where
     mkProps :: Scene (TD.TodoCollection Subject) -> ReadIORef [JE.Property]
@@ -122,17 +121,17 @@ appToggleCompleteAll ri =
             scn <- doReadIORef $ sceneRef sbj
             pure $ Any $ scn ^. _model.TD._completed
 
-    hdlChange :: (AsReactor cmd, Typeable p) => Gadget cmd p (TD.TodoCollection Subject) ()
+    hdlChange :: (AsReactor cmd) => Gadget cmd p (TD.TodoCollection Subject) ()
     hdlChange = do
         trigger_ ri "onChange" ()
-        tickSceneThen $ do
-            scn <- get
-            a <- lift $ hasActiveTodos (scn ^. _model.W._visibleList)
+        tickModelThen $ do
+            s <- get
+            a <- lift $ hasActiveTodos (s ^. W._visibleList)
             pure $ getAls $ foldMap (\sbj -> Als $ lift $ gadgetWith sbj
-                    (tickScene $ (_model.TD._completed) .= not a))
-                (view (_model.W._visibleList) scn) -- Only modify visible!
+                    (tickModel $ TD._completed .= not a))
+                (view W._visibleList s) -- Only modify visible!
 
-app_ :: (AsFacet (IO cmd) cmd, AsReactor cmd, AsJavascript cmd, Typeable p)
+app_ :: (AsFacet (IO cmd) cmd, AsReactor cmd, AsJavascript cmd)
     => JE.JSRep -> Widget cmd p (App Subject) (OnNewTodo J.JSString)
 app_ j = do
     todosRi <- mkReactId "todo-list"
@@ -170,52 +169,55 @@ app_ j = do
         gad = magnifiedEntity _todos $ finish $ onTicked $ do
             -- FIXME: Actually called heaps of times!
             postCmd_ $ putStrLn "updatingVisibleList1"
-            tickScene $ W.updateVisibleList todoFilterer todoSorter
+            tickModel $ W.updateVisibleList todoFilterer todoSorter
     wid `also` (lift gad)
 
-app :: (AsFacet (IO cmd) cmd, AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd, Typeable p)
+app :: (AsFacet (IO cmd) cmd, AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
     => JE.JSRep -> Widget cmd p (App Subject) r
 app j = app_ j
     >>= (lift . insertTodo')
 
-todoToggleCompleted :: (AsReactor cmd, Typeable p)
+todoToggleCompleted :: (AsReactor cmd)
     => TD.OnTodoToggleComplete W.UKey -> Gadget cmd p (App Subject) ()
-todoToggleCompleted (untag @"OnTodoToggleComplete" -> _) = rerender
+todoToggleCompleted (untag @"OnTodoToggleComplete" -> _) = -- rerender
+    tickModel (pure ())
 
-destroyTodo :: (AsReactor cmd, Typeable p)
+destroyTodo :: (AsReactor cmd)
     => TD.OnTodoDestroy W.UKey -> Gadget cmd p (App Subject) ()
 destroyTodo (untag @"OnTodoDestroy" -> k) = do
-    tickScene $ zoom (editSceneModel _todos) . void . runMaybeT $ W.deleteDynamicCollectionItem k
+    tickModelThen $ zoom _todos $ W.deleteDynamicCollectionItem k
 
 type OnTodoTicked = Tagged "OnTodoTicked"
 
-tickedTodo :: (AsFacet (IO cmd) cmd, AsReactor cmd, Typeable p)
+tickedTodo :: (AsFacet (IO cmd) cmd, AsReactor cmd)
     => OnTodoTicked W.UKey -> Gadget cmd p (App Subject) ()
 tickedTodo (untag @"OnTodoTicked" -> _) = do
     postCmd_ $ putStrLn "tickedTodo"
     postCmd_ $ putStrLn "updatingVisibleList2"
-    magnifiedEntity _todos $ tickScene $ pure () -- trigger onTicked for App
+    magnifiedEntity _todos $ tickModel $ pure () -- trigger onTicked for App
 
-insertTodo :: (AsFacet (IO cmd) cmd, AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd, Typeable p)
+insertTodo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
     => OnNewTodo J.JSString -> Gadget cmd p (App Subject) (Which '[TD.OnTodoToggleComplete W.UKey, TD.OnTodoDestroy W.UKey, OnTodoTicked W.UKey])
 insertTodo (untag @"OnNewTodo" -> n) = do
-    scn <- getScene
-    let mk = view (_model._todos.W._rawCollection.to M.lookupMax) scn
+    s <- getModel
+    let mk = view (_todos.W._rawCollection.to M.lookupMax) s
         k' = case mk of
             Just (k, _) -> W.largerUKey k
             Nothing -> W.zeroUKey
     withMkSubject (go k' <$> todo') (TD.Todo n False False) $ \sbj -> do
-        tickScene $ zoom (editSceneModel _todos) $ W.insertDynamicCollectionItem k' sbj
+        tickModelThen $ zoom _todos $ W.insertDynamicCollectionItem k' sbj
   where
     todo' = TD.todo
         & chooseWith also $ (onTicked (pure $ pickOnly $ Tagged @"OnTodoTicked" ()))
     go :: W.UKey -> Which '[TD.OnTodoToggleComplete (), TD.OnTodoDestroy (), OnTodoTicked ()] -> Which '[TD.OnTodoToggleComplete W.UKey, TD.OnTodoDestroy W.UKey, OnTodoTicked W.UKey]
     go k y = afmap (CaseFunc1 @C0 @Functor @C0 (fmap (const k))) y
 
-insertTodo' :: (AsFacet (IO cmd) cmd, AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd, Typeable p)
+insertTodo' :: (AsFacet (IO cmd) cmd, AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
     => OnNewTodo J.JSString -> Gadget cmd p (App Subject) r
 insertTodo' a = insertTodo a
     >>= (injectedK $ definitely . finish . todoToggleCompleted . obvious)
     >>= (injectedK $ definitely . finish . destroyTodo . obvious)
     >>= (injectedK $ definitely . finish . tickedTodo . obvious)
     & fmap impossible
+
+-- FIXME: autofocus on input on startup

@@ -22,11 +22,9 @@ module Todo.Footer
 
 import Control.Lens
 import qualified Control.Monad.ListM as LM
-import Data.Diverse.Lens
 import Data.Foldable
 import qualified Data.JSString as J
 import qualified Data.Map.Strict as M
-import Data.Typeable
 import Glazier.React
 import Glazier.React.Effect.JavaScript
 import qualified Glazier.React.Widgets.Collection.Dynamic as W
@@ -88,8 +86,8 @@ todoDisplay ri = do
            else alsoZero
 
 -- | The 'JE.JSRep' arg should be @document.defaultView@ or @window@
-todoFooter :: (AsReactor cmd, AsFacet (IO cmd) cmd
-    , Typeable p, AsJavascript cmd) => JE.JSRep -> ReactId -> Widget cmd p (TodoCollection Subject) r
+todoFooter :: (AsReactor cmd, AsJavascript cmd)
+    => JE.JSRep -> ReactId -> Widget cmd p (TodoCollection Subject) r
 todoFooter j ri =
     let win = todoDisplay ri
         gad = (finish $ hdlHashChange j)
@@ -98,47 +96,42 @@ todoFooter j ri =
     in (display win) `also` (lift gad)
   where
 
-hdlClearCompleted :: (AsReactor cmd, Typeable p) => ReactId -> Gadget cmd p (TodoCollection Subject) ()
+hdlClearCompleted :: (AsReactor cmd) => ReactId -> Gadget cmd p (TodoCollection Subject) ()
 hdlClearCompleted ri = do
     trigger_ ri "onClick" ()
-    tickScene $ do
-        xs <- use (_model.W._rawCollection.to M.toList)
+    tickModel $ do
+        xs <- use (W._rawCollection.to M.toList)
         xs' <- lift $ LM.filterMP (ftr . snd) xs
-        _model.W._rawCollection .= (M.fromList xs')
-        ys <- use (_model.W._visibleList)
+        W._rawCollection .= (M.fromList xs')
+        ys <- use (W._visibleList)
         ys' <- lift $ LM.filterMP ftr ys
-        _model.W._visibleList .= ys'
+        W._visibleList .= ys'
   where
     ftr x = do
         x' <- doReadIORef $ sceneRef x
         pure $ x' ^. _model.TD._completed.to not
 
-hdlHashChange :: (AsReactor cmd, Typeable p) => JE.JSRep -> Gadget cmd p (TodoCollection Subject) ()
+hdlHashChange :: (AsReactor cmd) => JE.JSRep -> Gadget cmd p (TodoCollection Subject) ()
 hdlHashChange j = do
     ftr <- mapHashChange <$> domTrigger j "hashchange" whenHashChange
-    tickScene $ _model.W._filterCriteria .= ftr
+    tickModel $ W._filterCriteria .= ftr
 
 hdlMounted ::
     ( AsReactor cmd
-    , AsFacet (IO cmd) cmd
     , AsJavascript cmd
-    , Typeable p
     )
     => JE.JSRep -> Gadget cmd p (TodoCollection Subject) ()
 hdlMounted j = do
-    postCmd_ $ putStrLn "mounted START"
     (`evalMaybeT` ()) $ do
         w <- lift $ sequel $ postCmd' . GetProperty j "location"
         h <- MaybeT . fmap JE.fromJSR . sequel $ postCmd' . GetProperty w "hash"
-        postCmd_ $ putStrLn "mounted!!!!"
         let ftr = mapHashChange h
-        tickScene $ _model.W._filterCriteria .= ftr
+        tickModel $ W._filterCriteria .= ftr
 
 -- | Provide split up parts of onHashChange in case the applications
 -- needs to combine other widgets that also uses hashchange event
 whenHashChange :: JE.JSRep -> MaybeT IO J.JSString
 whenHashChange evt = do
-    lift $ putStrLn "whenHashChange"
     newURL <- MaybeT (JE.fromJSR <$> JE.getProperty evt "newURL")
     let (_, newHash) = J.breakOn "#" newURL
     pure newHash

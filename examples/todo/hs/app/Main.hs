@@ -22,7 +22,6 @@ import qualified Data.DList as DL
 import Data.Foldable
 import Data.Proxy
 import Data.Tagged
-import Data.Typeable
 import qualified GHCJS.Foreign.Export as J
 import qualified GHCJS.Types as J
 import Glazier.React
