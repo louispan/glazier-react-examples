@@ -33,7 +33,7 @@ executable glazier-react-todo
                      , glazier >= 1.0
                      , glazier-react >= 1.0
                      , glazier-react-widget >= 1.0
-                     , javascript-extras >= 0.4
+                     , javascript-extras >= 0.5
                      , lens >= 4
                      , lens-misc >= 0.0.1
                      , monadlist >= 0.0.2

@@ -104,7 +104,7 @@ todoInput ri =
 
     hdlKeyDown :: (AsReactor cmd, AsHTMLElement cmd) => Gadget cmd p Todo (OnTodoDestroy ())
     hdlKeyDown = do
-        (KeyDownKey _ key) <- trigger' ri "onKeyDown" fireKeyDownKey
+        (KeyDownKey _ key) <- trigger ri "onKeyDown" fireKeyDownKey
         case key of
             -- NB. Enter and Escape doesn't generate a onChange event
             -- So there is no adverse interation with W.input onChange
@@ -120,7 +120,9 @@ todoInput ri =
                         _value .= v'
                         pure $ finish $ pure ()
 
-            "Escape" -> finish $ blurElement ri -- The onBlur handler will trim the value
+            "Escape" -> finish $ do
+                j <- getElementalRef ri
+                exec $ Blur j -- The onBlur handler will trim the value
 
             _ -> finish $ pure ()
 
@@ -145,11 +147,19 @@ todo = do
             ]
             win
 
-    hdlStartEdit :: (AsHTMLElement cmd, AsReactor cmd)
+    hdlStartEdit :: (AsHTMLElement cmd, AsJavascript cmd, AsReactor cmd)
         => ReactId -> OnTodoStartEdit () -> Gadget cmd p Todo ()
     hdlStartEdit ri (untag @"OnTodoStartEdit" -> _) = do
         tickModel $ _editing .= True
-        onNextRendered $ focusElement ri
+        -- j <- getElementalRef ri
+        -- onNextRendered $ do
+        --     exec $ Focus j
+        --     (`evalMaybeT` ()) $ do
+        --         v <- maybeGetProperty "value" j
+        --         let i = J.length v
+        --         doSetProperty ("selectionStart", JE.toJSR i) j
+        --         doSetProperty ("selectionEnd", JE.toJSR i) j
+
             -- (`evalMaybeT` ()) $ do
             --     v <- lift $ sequel $ postCmd' . GetProperty j "value"
             --     (l :: Int) <- MaybeT . fmap JE.fromJSR . sequel $ postCmd' . GetProperty v "length"

@@ -71,12 +71,12 @@ maybeExecApp ::
     , MonadReader r m
     )
     => (cmd -> m ()) -> cmd -> MaybeT m (Proxy '[[cmd], ReactorCmd cmd, JavaScriptCmd cmd, HTMLElementCmd, IO cmd] , ())
-maybeExecApp exec c =
-    maybeExec (traverse_ @[] exec) c
-    `orMaybeExec` maybeExec (execReactorCmd exec) c
-    `orMaybeExec` maybeExec (execJavascript exec) c
+maybeExecApp executor c =
+    maybeExec (traverse_ @[] executor) c
+    `orMaybeExec` maybeExec (execReactorCmd executor) c
+    `orMaybeExec` maybeExec (execJavascript executor) c
     `orMaybeExec` maybeExec execHTMLElementCmd c
-    `orMaybeExec` maybeExec ((>>= exec) . liftIO) c
+    `orMaybeExec` maybeExec ((>>= executor) . liftIO) c
 
 execApp ::
     ( MonadUnliftIO m
@@ -97,7 +97,7 @@ main = do
         setup = do
             sbj <- mkSubject' (TD.app documentDefaultView) (TD.App ""
                 (W.DynamicCollection TD.All () mempty mempty))
-            postCmd' (command_ <$> (putMVar sbjVar sbj))
+            exec' (command_ <$> (putMVar sbjVar sbj))
         cs = (`execState` mempty) $ evalContT setup
     -- run the initial commands, this will store the app Subject into sbjVar
     (`runReaderT` (Tagged @ReactId riVar)) $ traverse_ execApp cs

@@ -73,7 +73,7 @@ newTodoInput ri =
         (<> [("className", "new-todo"), ("placeholder", "What needs to be done?")])))
     gad = -- (finish $ trigger_ ri "onBlur" () *> hdlBlur)
         -- `also`
-        (trigger' ri "onKeyDown" fireKeyDownKey
+        (trigger ri "onKeyDown" fireKeyDownKey
             >>= hdlKeyDown)
 
     hdlKeyDown :: (AsReactor cmd) => KeyDownKey -> Gadget cmd p J.JSString (OnNewTodo J.JSString)
@@ -168,7 +168,7 @@ app_ j = do
                 in display win
         gad = magnifiedEntity _todos $ finish $ onTicked $ do
             -- FIXME: Actually called heaps of times!
-            postCmd_ $ putStrLn "updatingVisibleList1"
+            exec_ $ putStrLn "updatingVisibleList1"
             tickModel $ W.updateVisibleList todoFilterer todoSorter
     wid `also` (lift gad)
 
@@ -192,8 +192,8 @@ type OnTodoTicked = Tagged "OnTodoTicked"
 tickedTodo :: (AsFacet (IO cmd) cmd, AsReactor cmd)
     => OnTodoTicked W.UKey -> Gadget cmd p (App Subject) ()
 tickedTodo (untag @"OnTodoTicked" -> _) = do
-    postCmd_ $ putStrLn "tickedTodo"
-    postCmd_ $ putStrLn "updatingVisibleList2"
+    exec_ $ putStrLn "tickedTodo"
+    exec_ $ putStrLn "updatingVisibleList2"
     magnifiedEntity _todos $ tickModel $ pure () -- trigger onTicked for App
 
 insertTodo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)

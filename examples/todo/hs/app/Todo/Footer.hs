@@ -123,8 +123,7 @@ hdlMounted ::
     => JE.JSRep -> Gadget cmd p (TodoCollection Subject) ()
 hdlMounted j = do
     (`evalMaybeT` ()) $ do
-        w <- lift $ sequel $ postCmd' . GetProperty j "location"
-        h <- MaybeT . fmap JE.fromJSR . sequel $ postCmd' . GetProperty w "hash"
+        h <- (eval' $ GetProperty "location" j) >>= maybeGetProperty "hash"
         let ftr = mapHashChange h
         tickModel $ W._filterCriteria .= ftr
 
@@ -132,7 +131,7 @@ hdlMounted j = do
 -- needs to combine other widgets that also uses hashchange event
 whenHashChange :: JE.JSRep -> MaybeT IO J.JSString
 whenHashChange evt = do
-    newURL <- MaybeT (JE.fromJSR <$> JE.getProperty evt "newURL")
+    newURL <- MaybeT (JE.fromJSR <$> JE.getProperty "newURL" evt)
     let (_, newHash) = J.breakOn "#" newURL
     pure newHash
 
