@@ -131,11 +131,13 @@ todo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
 todo = do
     ri <- mkReactId "input"
     let todoInput' = pickOnly <$> todoInput ri
-        -- wid = todoView & chooseWith also $ (pickOnly <$> todoInput')
         wid = withWindow' todoView $ \todoViewWin' ->
             withWindow' todoInput' $ \todoInputWin' ->
                 definitely $ display $ todoViewWin' *> todoInputWin'
     overWindow fw wid >>= (injectedK $ lift . definitely . finish . hdlStartEdit ri . obvious)
+
+-- FIXME: combinators for liftW2 for liftWinodw'
+
 
   where
     fw win = do
@@ -151,18 +153,11 @@ todo = do
         => ReactId -> OnTodoStartEdit () -> Gadget cmd p Todo ()
     hdlStartEdit ri (untag @"OnTodoStartEdit" -> _) = do
         tickModel $ _editing .= True
-        -- j <- getElementalRef ri
-        -- onNextRendered $ do
-        --     exec $ Focus j
-        --     (`evalMaybeT` ()) $ do
-        --         v <- maybeGetProperty "value" j
-        --         let i = J.length v
-        --         doSetProperty ("selectionStart", JE.toJSR i) j
-        --         doSetProperty ("selectionEnd", JE.toJSR i) j
-
-            -- (`evalMaybeT` ()) $ do
-            --     v <- lift $ sequel $ postCmd' . GetProperty j "value"
-            --     (l :: Int) <- MaybeT . fmap JE.fromJSR . sequel $ postCmd' . GetProperty v "length"
-
-
--- FIXME: Double click to edit
+        j <- getElementalRef ri
+        onNextRendered $ do
+            exec $ Focus j
+            (`evalMaybeT` ()) $ do
+                v <- maybeGetProperty "value" j
+                let i = J.length v
+                exec' $ SetProperty ("selectionStart", JE.toJSR (0 :: Int)) j
+                exec' $ SetProperty ("selectionEnd", JE.toJSR i) j

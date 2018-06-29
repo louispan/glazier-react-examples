@@ -15,7 +15,7 @@
 # resolver:
 #  name: custom-snapshot
 #  location: "./custom-snapshot.yaml"
-# resolver: nightly-2018-04-21
+# resolver: nightly-2018-04-21 # ghc 8.4.1
 resolver: lts-7.19
 
 # User packages to be built.
@@ -82,6 +82,7 @@ extra-deps:
 - lens-4.16.1
 - profunctors-5.2.2
 - th-abstraction-0.2.7.0
+- stm-2.4.5.0
 # - transformers-0.5.5.0
 
 # Override default flag values for local packages and extra-deps

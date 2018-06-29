@@ -63,7 +63,7 @@ makeLenses_ ''App
 
 type OnNewTodo = Tagged "OnNewTodo"
 
-newTodoInput :: (AsReactor cmd, AsJavascript cmd)
+newTodoInput :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd, AsFacet (IO cmd) cmd)
     => ReactId -> Widget cmd p J.JSString (OnNewTodo J.JSString)
 newTodoInput ri =
     let wid = finish . void . overWindow fw $ W.textInput ri
@@ -71,10 +71,22 @@ newTodoInput ri =
   where
     fw = (modifyMarkup (overSurfaceProperties
         (<> [("className", "new-todo"), ("placeholder", "What needs to be done?")])))
-    gad = -- (finish $ trigger_ ri "onBlur" () *> hdlBlur)
-        -- `also`
-        (trigger ri "onKeyDown" fireKeyDownKey
+    gad = (finish hdlMounted)
+        `also` (trigger ri "onKeyDown" fireKeyDownKey
             >>= hdlKeyDown)
+
+    hdlMounted ::
+        ( AsReactor cmd
+        , AsHTMLElement cmd
+        , AsFacet (IO cmd) cmd
+        )
+        => Gadget cmd p J.JSString ()
+    hdlMounted = onMounted $ do
+        j <- getElementalRef ri
+        exec_ $ putStrLn "HOHOHO" -- FIXME: not called
+        onNextRendered $ do
+            exec_ $ putStrLn "HAAHA" -- FIXME: Triggere rerender?
+            exec $ Focus j
 
     hdlKeyDown :: (AsReactor cmd) => KeyDownKey -> Gadget cmd p J.JSString (OnNewTodo J.JSString)
     hdlKeyDown (KeyDownKey _ key) =
@@ -131,7 +143,7 @@ appToggleCompleteAll ri =
                     (tickModel $ TD._completed .= not a))
                 (view W._visibleList s) -- Only modify visible!
 
-app_ :: (AsFacet (IO cmd) cmd, AsReactor cmd, AsJavascript cmd)
+app_ :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd, AsFacet (IO cmd) cmd)
     => JE.JSRep -> Widget cmd p (App Subject) (OnNewTodo J.JSString)
 app_ j = do
     todosRi <- mkReactId "todo-list"
@@ -168,11 +180,11 @@ app_ j = do
                 in display win
         gad = magnifiedEntity _todos $ finish $ onTicked $ do
             -- FIXME: Actually called heaps of times!
-            exec_ $ putStrLn "updatingVisibleList1"
+            -- exec_ $ putStrLn "updatingVisibleList1"
             tickModel $ W.updateVisibleList todoFilterer todoSorter
     wid `also` (lift gad)
 
-app :: (AsFacet (IO cmd) cmd, AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+app :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd, AsFacet (IO cmd) cmd)
     => JE.JSRep -> Widget cmd p (App Subject) r
 app j = app_ j
     >>= (lift . insertTodo')
@@ -189,11 +201,11 @@ destroyTodo (untag @"OnTodoDestroy" -> k) = do
 
 type OnTodoTicked = Tagged "OnTodoTicked"
 
-tickedTodo :: (AsFacet (IO cmd) cmd, AsReactor cmd)
+tickedTodo :: (AsReactor cmd)
     => OnTodoTicked W.UKey -> Gadget cmd p (App Subject) ()
 tickedTodo (untag @"OnTodoTicked" -> _) = do
-    exec_ $ putStrLn "tickedTodo"
-    exec_ $ putStrLn "updatingVisibleList2"
+    -- exec_ $ putStrLn "tickedTodo"
+    -- exec_ $ putStrLn "updatingVisibleList2"
     magnifiedEntity _todos $ tickModel $ pure () -- trigger onTicked for App
 
 insertTodo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
@@ -212,7 +224,7 @@ insertTodo (untag @"OnNewTodo" -> n) = do
     go :: W.UKey -> Which '[TD.OnTodoToggleComplete (), TD.OnTodoDestroy (), OnTodoTicked ()] -> Which '[TD.OnTodoToggleComplete W.UKey, TD.OnTodoDestroy W.UKey, OnTodoTicked W.UKey]
     go k y = afmap (CaseFunc1 @C0 @Functor @C0 (fmap (const k))) y
 
-insertTodo' :: (AsFacet (IO cmd) cmd, AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+insertTodo' :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
     => OnNewTodo J.JSString -> Gadget cmd p (App Subject) r
 insertTodo' a = insertTodo a
     >>= (injectedK $ definitely . finish . todoToggleCompleted . obvious)
