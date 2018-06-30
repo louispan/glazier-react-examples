@@ -92,7 +92,7 @@ todoFooter j ri =
     let win = todoDisplay ri
         gad = (finish $ hdlHashChange j)
             `also` (finish $ hdlClearCompleted ri)
-            `also` (finish (onMounted (hdlMounted j)))
+            `also` (finish $ hdlMounted j)
     in (display win) `also` (lift gad)
   where
 
@@ -116,12 +116,13 @@ hdlHashChange j = do
     ftr <- mapHashChange <$> domTrigger j "hashchange" whenHashChange
     tickModel $ W._filterCriteria .= ftr
 
+-- | The 'JE.JSRep' arg should be @document.defaultView@ or @window@
 hdlMounted ::
     ( AsReactor cmd
     , AsJavascript cmd
     )
     => JE.JSRep -> Gadget cmd p (TodoCollection Subject) ()
-hdlMounted j = do
+hdlMounted j = onMounted $ do
     (`evalMaybeT` ()) $ do
         h <- (eval' $ GetProperty "location" j) >>= maybeGetProperty "hash"
         let ftr = mapHashChange h
