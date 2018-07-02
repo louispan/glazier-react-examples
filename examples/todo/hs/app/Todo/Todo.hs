@@ -77,7 +77,7 @@ todoView =
         wid = withWindow' todoToggleComplete' $ \todoToggleCompleteWin' ->
             withWindow' todoDestroy' $ \todoDestroyWin' ->
             withWindow' todoLabel' $ \todoLabelWin' ->
-                definitely $ display $ bh "div"
+                totally $ display $ bh "div"
                     [ ("key", "view")
                     , ("className", "view")] $
                         todoToggleCompleteWin'
@@ -131,13 +131,8 @@ todo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
 todo = do
     ri <- mkReactId "input"
     let todoInput' = pickOnly <$> todoInput ri
-        wid = withWindow' todoView $ \todoViewWin' ->
-            withWindow' todoInput' $ \todoInputWin' ->
-                definitely $ display $ todoViewWin' *> todoInputWin'
-    overWindow fw wid >>= (injectedK $ lift . definitely . finish . hdlStartEdit ri . obvious)
-
--- FIXME: combinators for liftW2 for liftWinodw'
-
+        wid = overWindow2' (*>) todoView todoInput'
+    overWindow fw wid >>= (injectedK $ lift . totally . finish . hdlStartEdit ri . obvious)
 
   where
     fw win = do

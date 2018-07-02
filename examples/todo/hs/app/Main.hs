@@ -70,8 +70,7 @@ main = do
         (JE.toJSR root)
   where
     execApp = verifyFixExec unAppCmd maybeExecApp
-    -- wid = noIOWidget (TD.app documentDefaultView) (TD.app documentDefaultView)
-    wid = TD.app documentDefaultView
+    wid = noIOWidget (TD.app documentDefaultView) (TD.app documentDefaultView)
 
 documentDefaultView :: JE.JSRep
 documentDefaultView = JE.toJSR js_documentDefaultView

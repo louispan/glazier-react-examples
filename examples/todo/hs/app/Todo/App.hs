@@ -218,7 +218,7 @@ insertTodo (untag @"OnNewTodo" -> n) = do
 insertTodo' :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
     => OnNewTodo J.JSString -> Gadget cmd p (App Subject) r
 insertTodo' a = insertTodo a
-    >>= (injectedK $ definitely . finish . todoToggleCompleted . obvious)
-    >>= (injectedK $ definitely . finish . destroyTodo . obvious)
-    >>= (injectedK $ definitely . finish . tickedTodo . obvious)
+    >>= (injectedK $ totally . finish . todoToggleCompleted . obvious)
+    >>= (injectedK $ totally . finish . destroyTodo . obvious)
+    >>= (injectedK $ totally . finish . tickedTodo . obvious)
     & fmap impossible
