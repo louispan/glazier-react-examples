@@ -31,8 +31,8 @@ executable glazier-react-todo
                      , deepseq >= 1.4
                      , dlist >= 0.8
                      , glazier >= 1.0
-                     , glazier-react >= 1.0
-                     , glazier-react-widget >= 1.0
+                     , glazier-react >= 1.0.0.1
+                     , glazier-react-widget >= 1.0.0.1
                      , javascript-extras >= 0.5
                      , lens >= 4
                      , lens-misc >= 0

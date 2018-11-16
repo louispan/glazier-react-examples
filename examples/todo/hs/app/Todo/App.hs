@@ -133,9 +133,12 @@ appToggleCompleteAll ri =
         tickModelThen $ do
             s <- get
             a <- lift $ hasActiveTodos (s ^. W._visibleList)
-            pure $ getAls $ foldMap (\sbj -> Als $ lift $ gadgetWith sbj
-                    (tickModel $ TD._completed .= not a))
-                (view W._visibleList s) -- Only modify visible!
+            pure $ getAls $ foldMap (go a) (view W._visibleList s) -- Only modify visible!
+      where
+        go a sbj = Als $ do
+            sbj' <- mkWeakSubject sbj
+            -- lift from ContT to GadgetT
+            lift $ gadgetWith sbj' (tickModel $ TD._completed .= not a)
 
 app_ :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
     => JE.JSRep -> Widget cmd p (App Subject) (OnNewTodo J.JSString)

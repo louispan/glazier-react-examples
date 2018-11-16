@@ -57,8 +57,10 @@ extra-deps:
 - data-diverse-lens-4.3.0.0
 - ghcjs-base-stub-0.2.0.0
 - glazier-1.0.0.0
-- glazier-react-1.0.0.0
-- glazier-react-widget-1.0.0.0
+# - glazier-react-1.0.0.0
+- '/Users/louis/repo/js/glazier-react'
+# - glazier-react-widget-1.0.0.0
+- '/Users/louis/repo/js/glazier-react-widget'
 - async-2.2.1
 - data-has-0.3.0.0
 - newtype-generics-0.5.3
