@@ -47,7 +47,7 @@ todoSorter _ _ _ = pure LT
 
 todoFilterer :: TD.Filter -> TD.Todo -> ReadIORef Bool
 todoFilterer ftr td = do
-    -- scn <- doReadIORef $ sceneRef sbj
+    -- scn <- doReadIORef $ modelRef sbj
     pure $ case ftr of
         TD.All -> True
         TD.Active -> not $ TD.completed $ td
@@ -102,7 +102,7 @@ newTodoInput ri =
             _ -> finish $ pure ()
 
 appToggleCompleteAll :: (AsReactor cmd)
-    => ReactId -> Widget cmd p (TD.TodoCollection Subject) r
+    => ReactId -> Widget cmd p (TD.TodoCollection Obj) r
 appToggleCompleteAll ri =
     let win = do
             scn <- ask
@@ -112,7 +112,7 @@ appToggleCompleteAll ri =
             (finish $ hdlChange)
     in (display win) `also` (lift gad)
   where
-    mkProps :: Scene (TD.TodoCollection Subject) -> ReadIORef [JE.Property]
+    mkProps :: Model (TD.TodoCollection Obj) -> ReadIORef [JE.Property]
     mkProps scn = traverse sequenceA
         [ ("key", pure . JE.toJSR $ ri)
         , ("className", pure "toggle-all")
@@ -120,14 +120,14 @@ appToggleCompleteAll ri =
         , ("checked", JE.toJSR <$> (hasActiveTodos (scn ^. _model.W._visibleList)))
         ]
 
-    hasActiveTodos ::  [Subject TD.Todo] -> ReadIORef Bool
+    hasActiveTodos ::  [Obj TD.Todo] -> ReadIORef Bool
     hasActiveTodos = fmap getAny . getAp . foldMap go
       where
         go sbj = Ap $ do
-            scn <- doReadIORef $ sceneRef sbj
+            scn <- doReadIORef $ modelRef sbj
             pure $ Any $ scn ^. _model.TD._completed
 
-    hdlChange :: (AsReactor cmd) => Gadget cmd p (TD.TodoCollection Subject) ()
+    hdlChange :: (AsReactor cmd) => Gadget cmd p (TD.TodoCollection Obj) ()
     hdlChange = do
         trigger_ ri "onChange" ()
         tickModelThen $ do
@@ -136,12 +136,12 @@ appToggleCompleteAll ri =
             pure $ getAls $ foldMap (go a) (view W._visibleList s) -- Only modify visible!
       where
         go a sbj = Als $ do
-            sbj' <- mkWeakSubject sbj
+            sbj' <- mkWeakObj sbj
             -- lift from ContT to GadgetT
             lift $ gadgetWith sbj' (tickModel $ TD._completed .= not a)
 
 app_ :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => JE.JSRep -> Widget cmd p (App Subject) (OnNewTodo J.JSString)
+    => JE.JSRep -> Widget cmd p (App Obj) (OnNewTodo J.JSString)
 app_ j = do
     todosRi <- mkReactId "todo-list"
     let newTodo' = magnifyWidget _newTodo $ mkReactId "new-todo" >>= newTodoInput
@@ -171,46 +171,46 @@ app_ j = do
                                     appToggleCompleteAllWin
 
                                     -- Render the list of todos
-                                    magnifiedScene _todos todosWindow
+                                    magnifiedModel _todos todosWindow
 
                                     -- Render the footer
                                     todoFooterWin
                 in display win
-        gad = magnifiedEntity _todos $ finish $ onTicked $
+        gad = magnifiedThisObj _todos $ finish $ onTicked $
             tickModel $ W.updateVisibleList todoFilterer todoSorter
     wid `also` (lift gad)
 
 app :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => JE.JSRep -> Widget cmd p (App Subject) r
+    => JE.JSRep -> Widget cmd p (App Obj) r
 app j = app_ j
     >>= (lift . insertTodo')
 
 todoToggleCompleted :: (AsReactor cmd)
-    => TD.OnTodoToggleComplete W.UKey -> Gadget cmd p (App Subject) ()
+    => TD.OnTodoToggleComplete W.UKey -> Gadget cmd p (App Obj) ()
 todoToggleCompleted (untag @"OnTodoToggleComplete" -> _) = -- rerender
     tickModel (pure ())
 
 destroyTodo :: (AsReactor cmd)
-    => TD.OnTodoDestroy W.UKey -> Gadget cmd p (App Subject) ()
+    => TD.OnTodoDestroy W.UKey -> Gadget cmd p (App Obj) ()
 destroyTodo (untag @"OnTodoDestroy" -> k) = do
     tickModelThen $ zoom _todos $ W.deleteDynamicCollectionItem k
 
 type OnTodoTicked = Tagged "OnTodoTicked"
 
 tickedTodo :: (AsReactor cmd)
-    => OnTodoTicked W.UKey -> Gadget cmd p (App Subject) ()
+    => OnTodoTicked W.UKey -> Gadget cmd p (App Obj) ()
 tickedTodo (untag @"OnTodoTicked" -> _) =
-    magnifiedEntity _todos $ tickModel $ pure () -- trigger onTicked for App
+    magnifiedThisObj _todos $ tickModel $ pure () -- trigger onTicked for App
 
 insertTodo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => OnNewTodo J.JSString -> Gadget cmd p (App Subject) (Which '[TD.OnTodoToggleComplete W.UKey, TD.OnTodoDestroy W.UKey, OnTodoTicked W.UKey])
+    => OnNewTodo J.JSString -> Gadget cmd p (App Obj) (Which '[TD.OnTodoToggleComplete W.UKey, TD.OnTodoDestroy W.UKey, OnTodoTicked W.UKey])
 insertTodo (untag @"OnNewTodo" -> n) = do
     s <- getModel
     let mk = view (_todos.W._rawCollection.to M.lookupMax) s
         k' = case mk of
             Just (k, _) -> W.largerUKey k
             Nothing -> W.zeroUKey
-    withMkSubject (go k' <$> todo') (TD.Todo n False False) $ \sbj -> do
+    withMkObj (go k' <$> todo') (TD.Todo n False False) $ \sbj -> do
         tickModelThen $ zoom _todos $ W.insertDynamicCollectionItem k' sbj
   where
     todo' = TD.todo
@@ -219,7 +219,7 @@ insertTodo (untag @"OnNewTodo" -> n) = do
     go k y = afmap (CaseFunc1 @C0 @Functor @C0 (fmap (const k))) y
 
 insertTodo' :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => OnNewTodo J.JSString -> Gadget cmd p (App Subject) r
+    => OnNewTodo J.JSString -> Gadget cmd p (App Obj) r
 insertTodo' a = insertTodo a
     >>= (injectedK $ totally . finish . todoToggleCompleted . obvious)
     >>= (injectedK $ totally . finish . destroyTodo . obvious)

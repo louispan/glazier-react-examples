@@ -34,12 +34,12 @@ import qualified Todo.Todo as TD
 
 type TodoCollection f = W.DynamicCollection TD.Filter () W.UKey TD.Todo f
 
-todoDisplay :: ReactId -> Window (TodoCollection Subject) ()
+todoDisplay :: ReactId -> Window (TodoCollection Obj) ()
 todoDisplay ri = do
     s <- ask
     let xs = s ^. (_model.W._rawCollection.to toList)
-        isActive sbj = do
-            td <- doReadIORef (sceneRef sbj)
+        isActive obj = do
+            td <- doReadIORef (modelRef obj)
             pure $ td ^. _model.TD._completed
     (completed, active) <- lift $ LM.partitionM isActive xs
     let completedCount = length @[] completed
@@ -87,7 +87,7 @@ todoDisplay ri = do
 
 -- | The 'JE.JSRep' arg should be @document.defaultView@ or @window@
 todoFooter :: (AsReactor cmd, AsJavascript cmd)
-    => JE.JSRep -> ReactId -> Widget cmd p (TodoCollection Subject) r
+    => JE.JSRep -> ReactId -> Widget cmd p (TodoCollection Obj) r
 todoFooter j ri =
     let win = todoDisplay ri
         gad = (finish $ hdlHashChange j)
@@ -96,7 +96,7 @@ todoFooter j ri =
     in (display win) `also` (lift gad)
   where
 
-hdlClearCompleted :: (AsReactor cmd) => ReactId -> Gadget cmd p (TodoCollection Subject) ()
+hdlClearCompleted :: (AsReactor cmd) => ReactId -> Gadget cmd p (TodoCollection Obj) ()
 hdlClearCompleted ri = do
     trigger_ ri "onClick" ()
     tickModel $ do
@@ -108,10 +108,10 @@ hdlClearCompleted ri = do
         W._visibleList .= ys'
   where
     ftr x = do
-        x' <- doReadIORef $ sceneRef x
+        x' <- doReadIORef $ modelRef x
         pure $ x' ^. _model.TD._completed.to not
 
-hdlHashChange :: (AsReactor cmd) => JE.JSRep -> Gadget cmd p (TodoCollection Subject) ()
+hdlHashChange :: (AsReactor cmd) => JE.JSRep -> Gadget cmd p (TodoCollection Obj) ()
 hdlHashChange j = do
     ftr <- mapHashChange <$> domTrigger j "hashchange" whenHashChange
     tickModel $ W._filterCriteria .= ftr
@@ -121,7 +121,7 @@ hdlMounted ::
     ( AsReactor cmd
     , AsJavascript cmd
     )
-    => JE.JSRep -> Gadget cmd p (TodoCollection Subject) ()
+    => JE.JSRep -> Gadget cmd p (TodoCollection Obj) ()
 hdlMounted j = onMounted $ do
     (`evalMaybeT` ()) $ do
         h <- (eval' $ GetProperty "location" j) >>= maybeGetProperty "hash"
