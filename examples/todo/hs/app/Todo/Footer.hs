@@ -99,7 +99,7 @@ todoFooter j ri =
 hdlClearCompleted :: (AsReactor cmd) => ReactId -> Gadget cmd p (TodoCollection Obj) ()
 hdlClearCompleted ri = do
     trigger_ ri "onClick" ()
-    tickModel $ do
+    mutate $ do
         xs <- use (W._rawCollection.to M.toList)
         xs' <- lift $ LM.filterMP (ftr . snd) xs
         W._rawCollection .= (M.fromList xs')
@@ -114,7 +114,7 @@ hdlClearCompleted ri = do
 hdlHashChange :: (AsReactor cmd) => JE.JSRep -> Gadget cmd p (TodoCollection Obj) ()
 hdlHashChange j = do
     ftr <- mapHashChange <$> domTrigger j "hashchange" whenHashChange
-    tickModel $ W._filterCriteria .= ftr
+    mutate $ W._filterCriteria .= ftr
 
 -- | The 'JE.JSRep' arg should be @document.defaultView@ or @window@
 hdlMounted ::
@@ -126,7 +126,7 @@ hdlMounted j = onMounted $ do
     (`evalMaybeT` ()) $ do
         h <- (eval' $ GetProperty "location" j) >>= maybeGetProperty "hash"
         let ftr = mapHashChange h
-        tickModel $ W._filterCriteria .= ftr
+        mutate $ W._filterCriteria .= ftr
 
 -- | Provide split up parts of onHashChange in case the applications
 -- needs to combine other widgets that also uses hashchange event

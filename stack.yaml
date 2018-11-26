@@ -16,7 +16,7 @@
 #  name: custom-snapshot
 #  location: "./custom-snapshot.yaml"
 # resolver: nightly-2018-04-21 # ghc 8.4.1
-resolver: lts-7.19
+resolver: lts-7.24
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
@@ -49,27 +49,23 @@ packages:
 # (e.g., acme-missiles-0.3)
 extra-deps:
 - git: git@github.com:ghcjs/ghcjs-base.git
-  commit: b4a8d578758613e5c7db88891f444ff5e6f3edb9
+  commit: HEAD
 - lens-misc-0.0.2.0
 - javascript-extras-0.5.0.0
 - alternators-1.0.0.0
 - data-diverse-4.6.0.0
 - data-diverse-lens-4.3.0.0
 - ghcjs-base-stub-0.2.0.0
-- glazier-1.0.0.0
+- '/Users/louis/repo/hs/glazier'
+# - glazier-1.0.0.0
 # - glazier-react-1.0.0.0
 - '/Users/louis/repo/js/glazier-react'
 # - glazier-react-widget-1.0.0.0
 - '/Users/louis/repo/js/glazier-react-widget'
-- async-2.2.1
 - data-has-0.3.0.0
 - newtype-generics-0.5.3
 - unliftio-0.2.7.0
 - unliftio-core-0.1.1.0
-- containers-0.5.11.0
-- lens-4.16.1
-- profunctors-5.2.2
-- th-abstraction-0.2.7.0
 - stm-2.4.5.0
 - monadlist-0.0.2
 

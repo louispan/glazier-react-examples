@@ -47,13 +47,15 @@ maybeExecApp ::
     , AsJavascript cmd
     , AsHTMLElement cmd
     )
-    => (cmd -> m ()) -> cmd -> MaybeT m (Proxy '[[cmd], ReactorCmd cmd, JavaScriptCmd cmd, HTMLElementCmd, IO cmd] , ())
+    => (cmd -> m ()) -> cmd -> MaybeT m (Proxy '[[cmd], ReactorCmd cmd, JavaScriptCmd cmd, HTMLElementCmd, IO cmd], [cmd])
 maybeExecApp executor c =
-    maybeExec (traverse_ @[] executor) c
+    maybeExec (done (traverse_ @[] executor)) c
     `orMaybeExec` maybeExec (execReactorCmd executor) c
-    `orMaybeExec` maybeExec (execJavascript executor) c
-    `orMaybeExec` maybeExec execHTMLElementCmd c
-    `orMaybeExec` maybeExec ((>>= executor) . liftIO) c
+    `orMaybeExec` maybeExec (done (execJavascript executor)) c
+    `orMaybeExec` maybeExec (done execHTMLElementCmd) c
+    `orMaybeExec` maybeExec (done ((>>= executor) . liftIO)) c
+  where
+    done f b = (\() -> []) <$> (f b)
 
 -- | 'main' is used to create React classes and setup callbacks to be used externally by the browser.
 -- GHCJS runs 'main' lazily.
@@ -69,7 +71,7 @@ main = do
         (TD.App "" (W.DynamicCollection TD.All () mempty mempty))
         (JE.toJSR root)
   where
-    execApp = verifyFixExec unAppCmd maybeExecApp
+    execApp = verifyAndFixExec' unAppCmd maybeExecApp
     wid = noIOWidget (TD.app documentDefaultView) (TD.app documentDefaultView)
 
 documentDefaultView :: JE.JSRep

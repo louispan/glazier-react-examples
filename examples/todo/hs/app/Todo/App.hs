@@ -26,6 +26,7 @@ import Data.Diverse.Profunctor
 import qualified Data.DList as DL
 import qualified Data.JSString as J
 import qualified Data.Map.Strict as M
+import Data.Maybe
 import Data.Monoid
 import Data.Semigroup.Applicative
 import Data.Tagged
@@ -89,7 +90,7 @@ newTodoInput ri =
             -- NB. Enter and Escape doesn't generate a onChange event
             -- So there is no adverse interation with W.input onChange
             -- updating the value under our feet.
-            "Enter" -> tickModelThen $ do
+            "Enter" -> mutateThen $ do
                 v <- get
                 let v' = J.strip v
                 id .= J.empty
@@ -97,7 +98,7 @@ newTodoInput ri =
                     then finish $ pure ()
                     else pure $ Tagged @"OnNewTodo" v'
 
-            "Escape" -> finish $ tickModel $ id .= J.empty
+            "Escape" -> finish $ mutate $ id .= J.empty
 
             _ -> finish $ pure ()
 
@@ -130,14 +131,14 @@ appToggleCompleteAll ri =
     hdlChange :: (AsReactor cmd) => Gadget cmd p (TD.TodoCollection Obj) ()
     hdlChange = do
         trigger_ ri "onChange" ()
-        tickModelThen $ do
+        mutateThen $ do
             s <- get
             a <- lift $ hasActiveTodos (s ^. W._visibleList)
             pure $ getAls $ foldMap (go a) (view W._visibleList s) -- Only modify visible!
       where
         go a obj = Als $ do
             -- lift from ContT to GadgetT
-            lift $ gadgetWith' obj (tickModel $ TD._completed .= not a)
+            lift $ gadgetWith' obj (mutate $ TD._completed .= not a)
 
 app_ :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
     => JE.JSRep -> Widget cmd p (App Obj) (OnNewTodo J.JSString)
@@ -175,8 +176,8 @@ app_ j = do
                                     -- Render the footer
                                     todoFooterWin
                 in display win
-        gad = magnifiedEntity _todos $ finish $ onTicked $
-            tickModel $ W.updateVisibleList todoFilterer todoSorter
+        gad = magnifiedEntity _todos $ finish $ onMutated $
+            mutate $ W.updateVisibleList todoFilterer todoSorter
     wid `also` (lift gad)
 
 app :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
@@ -187,33 +188,34 @@ app j = app_ j
 todoToggleCompleted :: (AsReactor cmd)
     => TD.OnTodoToggleComplete W.UKey -> Gadget cmd p (App Obj) ()
 todoToggleCompleted (untag @"OnTodoToggleComplete" -> _) = -- rerender
-    tickModel (pure ())
+    mutate (pure ())
 
 destroyTodo :: (AsReactor cmd)
     => TD.OnTodoDestroy W.UKey -> Gadget cmd p (App Obj) ()
 destroyTodo (untag @"OnTodoDestroy" -> k) =
-    tickModel $ _todos.W._rawCollection.(at k) .= Nothing
+    mutate $ _todos.W._rawCollection.(at k) .= Nothing
 
 type OnTodoTicked = Tagged "OnTodoTicked"
 
 tickedTodo :: (AsReactor cmd)
     => OnTodoTicked W.UKey -> Gadget cmd p (App Obj) ()
 tickedTodo (untag @"OnTodoTicked" -> _) =
-    magnifiedEntity _todos $ tickModel $ pure () -- trigger onTicked for App
+    magnifiedEntity _todos $ mutate $ pure () -- trigger onMutated for App
 
 insertTodo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
     => OnNewTodo J.JSString -> Gadget cmd p (App Obj) (Which '[TD.OnTodoToggleComplete W.UKey, TD.OnTodoDestroy W.UKey, OnTodoTicked W.UKey])
 insertTodo (untag @"OnNewTodo" -> n) = do
     s <- getModel
-    let mk = view (_todos.W._rawCollection.to M.lookupMax) s
+    let mk = view (_todos.W._rawCollection.to lookupMax) s
         k' = case mk of
             Just (k, _) -> W.largerUKey k
             Nothing -> W.zeroUKey
     withMkObj (go k' <$> todo') (TD.Todo n False False) $ \obj ->
-        tickModel $ _todos.W._rawCollection.(at k') .= Just obj
+        mutate $ _todos.W._rawCollection.(at k') .= Just obj
   where
+    lookupMax = listToMaybe . M.toDescList
     todo' = TD.todo
-        & chooseWith also $ (onTicked (pure $ pickOnly $ Tagged @"OnTodoTicked" ()))
+        & chooseWith also $ (onMutated (pure $ pickOnly $ Tagged @"OnTodoTicked" ()))
     go :: W.UKey -> Which '[TD.OnTodoToggleComplete (), TD.OnTodoDestroy (), OnTodoTicked ()] -> Which '[TD.OnTodoToggleComplete W.UKey, TD.OnTodoDestroy W.UKey, OnTodoTicked W.UKey]
     go k y = afmap (CaseFunc1 @C0 @Functor @C0 (fmap (const k))) y
 

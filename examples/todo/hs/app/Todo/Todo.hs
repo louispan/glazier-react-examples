@@ -98,7 +98,7 @@ todoInput ri =
     hdlBlur :: (AsReactor cmd) => Gadget cmd p Todo ()
     hdlBlur = do
         trigger_ ri "onBlur" ()
-        tickModel $ do
+        mutate $ do
             _editing .= False
             _value %= J.strip
 
@@ -109,7 +109,7 @@ todoInput ri =
             -- NB. Enter and Escape doesn't generate a onChange event
             -- So there is no adverse interation with W.input onChange
             -- updating the value under our feet.
-            "Enter" -> tickModelThen $ do
+            "Enter" -> mutateThen $ do
                 v <- use _value
                 let v' = J.strip v
                 if J.null v'
@@ -147,7 +147,7 @@ todo = do
     hdlStartEdit :: (AsHTMLElement cmd, AsJavascript cmd, AsReactor cmd)
         => ReactId -> OnTodoStartEdit () -> Gadget cmd p Todo ()
     hdlStartEdit ri (untag @"OnTodoStartEdit" -> _) = do
-        tickModel $ _editing .= True
+        mutate $ _editing .= True
         j <- getElementalRef ri
         onNextRendered $ do
             exec $ Focus j
