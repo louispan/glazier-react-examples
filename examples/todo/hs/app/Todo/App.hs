@@ -131,6 +131,7 @@ appToggleCompleteAll ri =
     hdlChange :: (AsReactor cmd) => Gadget cmd p (TD.TodoCollection Obj) ()
     hdlChange = do
         trigger_ ri "onChange" ()
+        put "App ToggleAll"
         mutateThen $ do
             s <- get
             a <- lift $ hasActiveTodos (s ^. W._visibleList)
@@ -176,8 +177,10 @@ app_ j = do
                                     -- Render the footer
                                     todoFooterWin
                 in display win
-        gad = magnifiedEntity _todos $ finish $ onMutated $
-            mutate $ W.updateVisibleList todoFilterer todoSorter
+        gad = magnifiedEntity _todos $ finish $ do
+            -- FIXME: this is being called on every keystroke in the input!
+            put "App Mutated"
+            onMutated $ mutate $ W.updateVisibleList todoFilterer todoSorter
     wid `also` (lift gad)
 
 app :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
