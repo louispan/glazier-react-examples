@@ -35,7 +35,7 @@ import qualified Todo.Todo as TD
 type TodoCollection f = W.DynamicCollection TD.Filter () W.UKey TD.Todo f
 
 todoDisplay :: ReactId -> Window (TodoCollection Obj) ()
-todoDisplay ri = do
+todoDisplay k = do
     s <- ask
     let xs = s ^. (_model.W._rawCollection.to toList)
         isActive obj = do
@@ -44,7 +44,7 @@ todoDisplay ri = do
     (completed, active) <- lift $ LM.partitionM isActive xs
     let completedCount = length @[] completed
         activeCount = length active
-    bh "footer" [("key", JE.toJSR $ ri), ("className", "footer")] $ do
+    bh "footer" [("key", reactIdKey' k), ("className", "footer")] $ do
         bh "span" [ ("className", "todo-count")
                     , ("key", "todo-count")] $ do
             bh "strong" [("key", "items")] (txt $ J.pack $ show activeCount)
@@ -80,7 +80,7 @@ todoDisplay ri = do
                     ] $
                     txt "Completed"
         if (completedCount > 0)
-           then bh' ri "button"
+           then bh' k "button"
                     [("key", "clear-completed"), ("className", "clear-completed")] $
                     txt "Clear completed"
            else alsoZero
@@ -88,18 +88,18 @@ todoDisplay ri = do
 -- | The 'JE.JSRep' arg should be @document.defaultView@ or @window@
 todoFooter :: (AsReactor cmd, AsJavascript cmd)
     => JE.JSRep -> ReactId -> Widget cmd p (TodoCollection Obj) r
-todoFooter j ri =
-    let win = todoDisplay ri
-        gad = (finish $ hdlHashChange j)
-            `also` (finish $ hdlClearCompleted ri)
-            `also` (finish $ hdlMounted j)
+todoFooter j k =
+    let win = todoDisplay k
+        gad = (finish $ hdlHashChange k j)
+            `also` (finish $ hdlClearCompleted k)
+            `also` (finish $ hdlMounted k j)
     in (display win) `also` (lift gad)
   where
 
 hdlClearCompleted :: (AsReactor cmd) => ReactId -> Gadget cmd p (TodoCollection Obj) ()
-hdlClearCompleted ri = do
-    trigger_ ri "onClick" ()
-    mutate $ do
+hdlClearCompleted k = do
+    trigger_ k "onClick" ()
+    mutate k $ do
         xs <- use (W._rawCollection.to M.toList)
         xs' <- lift $ LM.filterMP (ftr . snd) xs
         W._rawCollection .= (M.fromList xs')
@@ -111,22 +111,22 @@ hdlClearCompleted ri = do
         x' <- doReadIORef $ modelRef x
         pure $ x' ^. _model.TD._completed.to not
 
-hdlHashChange :: (AsReactor cmd) => JE.JSRep -> Gadget cmd p (TodoCollection Obj) ()
-hdlHashChange j = do
+hdlHashChange :: (AsReactor cmd) => ReactId -> JE.JSRep -> Gadget cmd p (TodoCollection Obj) ()
+hdlHashChange k j = do
     ftr <- mapHashChange <$> domTrigger j "hashchange" whenHashChange
-    mutate $ W._filterCriteria .= ftr
+    mutate k $ W._filterCriteria .= ftr
 
 -- | The 'JE.JSRep' arg should be @document.defaultView@ or @window@
 hdlMounted ::
     ( AsReactor cmd
     , AsJavascript cmd
     )
-    => JE.JSRep -> Gadget cmd p (TodoCollection Obj) ()
-hdlMounted j = onMounted $ do
+    => ReactId -> JE.JSRep -> Gadget cmd p (TodoCollection Obj) ()
+hdlMounted k j = onMounted $ do
     (`evalMaybeT` ()) $ do
         h <- (eval' $ GetProperty "location" j) >>= maybeGetProperty "hash"
         let ftr = mapHashChange h
-        mutate $ W._filterCriteria .= ftr
+        mutate k $ W._filterCriteria .= ftr
 
 -- | Provide split up parts of onHashChange in case the applications
 -- needs to combine other widgets that also uses hashchange event

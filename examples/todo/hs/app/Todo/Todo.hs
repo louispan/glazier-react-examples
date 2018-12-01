@@ -46,27 +46,27 @@ type OnTodoToggleComplete = Tagged "OnTodoToggleComplete"
 type OnTodoStartEdit = Tagged "OnTodoStartEdit"
 
 todoToggleComplete :: (AsReactor cmd) => ReactId -> Widget cmd p Todo (OnTodoToggleComplete ())
-todoToggleComplete ri =
-    let wid = (retag @"InputChange" @_ @"OnTodoToggleComplete") <$> overWindow fw (W.checkboxInput ri)
+todoToggleComplete k =
+    let wid = (retag @"InputChange" @_ @"OnTodoToggleComplete") <$> overWindow fw (W.checkboxInput k)
     in magnifyWidget _completed wid
   where
     fw = (modifyMarkup (overSurfaceProperties (`DL.snoc` ("className", "toggle"))))
 
 todoDestroy :: (AsReactor cmd) => ReactId -> Widget cmd p s (OnTodoDestroy ())
-todoDestroy ri =
-    let win = lf' ri "button"
+todoDestroy k =
+    let win = lf' k "button"
             [ ("key", "destroy")
             , ("className", "destroy")]
-        gad = trigger_ ri "onClick" (Tagged @"OnTodoDestroy" ())
+        gad = trigger_ k "onClick" (Tagged @"OnTodoDestroy" ())
     in (display win) `also` (lift gad)
 
 todoLabel :: (AsReactor cmd) => ReactId -> Widget cmd p Todo (OnTodoStartEdit ())
-todoLabel ri =
+todoLabel k =
     let win = do
             str <- view (_model._value)
-            bh' ri "label" [("key", "label")] $
+            bh' k "label" [("key", "label")] $
                 txt str
-        gad = trigger_ ri "onDoubleClick" (Tagged @"OnTodoStartEdit" ())
+        gad = trigger_ k "onDoubleClick" (Tagged @"OnTodoStartEdit" ())
     in (display win) `also` (lift gad)
 
 todoView :: (AsReactor cmd) => Widget cmd p Todo (Which '[OnTodoToggleComplete (), OnTodoDestroy (), OnTodoStartEdit ()])
@@ -86,8 +86,8 @@ todoView =
     in wid
 
 todoInput :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd) => ReactId -> Widget cmd p Todo (OnTodoDestroy ())
-todoInput ri =
-    let wid = overWindow fw . magnifyWidget _value $ W.textInput ri
+todoInput k =
+    let wid = overWindow fw . magnifyWidget _value $ W.textInput k
         wid' = finish (void wid) `also` lift gad
     in wid'
   where
@@ -97,19 +97,19 @@ todoInput ri =
 
     hdlBlur :: (AsReactor cmd) => Gadget cmd p Todo ()
     hdlBlur = do
-        trigger_ ri "onBlur" ()
-        mutate $ do
+        trigger_ k "onBlur" ()
+        mutate k $ do
             _editing .= False
             _value %= J.strip
 
     hdlKeyDown :: (AsReactor cmd, AsHTMLElement cmd) => Gadget cmd p Todo (OnTodoDestroy ())
     hdlKeyDown = do
-        (KeyDownKey _ key) <- trigger ri "onKeyDown" fireKeyDownKey
+        (KeyDownKey _ key) <- trigger k "onKeyDown" fireKeyDownKey
         case key of
             -- NB. Enter and Escape doesn't generate a onChange event
             -- So there is no adverse interation with W.input onChange
             -- updating the value under our feet.
-            "Enter" -> mutateThen $ do
+            "Enter" -> mutateThen k $ do
                 v <- use _value
                 let v' = J.strip v
                 if J.null v'
@@ -121,7 +121,7 @@ todoInput ri =
                         pure $ finish $ pure ()
 
             "Escape" -> finish $ do
-                j <- getElementalRef ri
+                j <- getElementalRef k
                 exec $ Blur j -- The onBlur handler will trim the value
 
             _ -> finish $ pure ()
@@ -129,10 +129,10 @@ todoInput ri =
 todo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
     => Widget cmd p Todo (Which '[OnTodoToggleComplete (), OnTodoDestroy ()])
 todo = do
-    ri <- mkReactId "input"
-    let todoInput' = pickOnly <$> todoInput ri
+    k <- mkReactId "input"
+    let todoInput' = pickOnly <$> todoInput k
         wid = overWindow2' (*>) todoView todoInput'
-    overWindow fw wid >>= (injectedK $ lift . totally . finish . hdlStartEdit ri . obvious)
+    overWindow fw wid >>= (injectedK $ lift . totally . finish . hdlStartEdit k . obvious)
 
   where
     fw win = do
@@ -146,9 +146,9 @@ todo = do
 
     hdlStartEdit :: (AsHTMLElement cmd, AsJavascript cmd, AsReactor cmd)
         => ReactId -> OnTodoStartEdit () -> Gadget cmd p Todo ()
-    hdlStartEdit ri (untag @"OnTodoStartEdit" -> _) = do
-        mutate $ _editing .= True
-        j <- getElementalRef ri
+    hdlStartEdit k (untag @"OnTodoStartEdit" -> _) = do
+        mutate k $ _editing .= True
+        j <- getElementalRef k
         onNextRendered $ do
             exec $ Focus j
             (`evalMaybeT` ()) $ do
