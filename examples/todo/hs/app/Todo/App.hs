@@ -64,7 +64,7 @@ makeLenses_ ''App
 type OnNewTodo = Tagged "OnNewTodo"
 
 newTodoInput :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => ReactId -> Widget cmd p J.JSString (OnNewTodo J.JSString)
+    => ReactId -> Widget cmd p J.JSString (OnNewTodo (ReactId, J.JSString))
 newTodoInput k =
     let wid = finish . void . overWindow fw $ W.textInput k
     in wid `also` lift gad
@@ -84,7 +84,7 @@ newTodoInput k =
         j <- getElementalRef k
         exec $ Focus j
 
-    hdlKeyDown :: (AsReactor cmd) => KeyDownKey -> Gadget cmd p J.JSString (OnNewTodo J.JSString)
+    hdlKeyDown :: (AsReactor cmd) => KeyDownKey -> Gadget cmd p J.JSString (OnNewTodo (ReactId, J.JSString))
     hdlKeyDown (KeyDownKey _ key) =
         case key of
             -- NB. Enter and Escape doesn't generate a onChange event
@@ -96,7 +96,7 @@ newTodoInput k =
                 id .= J.empty
                 pure $ if J.null v'
                     then finish $ pure ()
-                    else pure $ Tagged @"OnNewTodo" v'
+                    else pure $ Tagged @"OnNewTodo" (k, v')
 
             "Escape" -> finish $ mutate k $ id .= J.empty
 
@@ -142,7 +142,7 @@ appToggleCompleteAll k =
             lift $ gadgetWith' obj (mutate k $ TD._completed .= not a)
 
 app_ :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => JE.JSRep -> ReactId -> Widget cmd p (App Obj) (OnNewTodo J.JSString)
+    => JE.JSRep -> ReactId -> Widget cmd p (App Obj) (OnNewTodo (ReactId, J.JSString))
 app_ j todosK = do
     newTodoK <- mkReactId "new-todo"
     let newTodo' = magnifyWidget _newTodo $ newTodoInput newTodoK
@@ -197,26 +197,27 @@ app :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
     => JE.JSRep -> Widget cmd p (App Obj) r
 app j = do
     todosK <- mkReactId "todo-list"
-    app_ j todosK >>= (lift . insertTodo' todosK)
+    app_ j todosK >>= (lift . insertTodo')
 
 todoToggleCompleted :: (AsReactor cmd)
-    => ReactId -> TD.OnTodoToggleComplete W.UKey -> Gadget cmd p (App Obj) ()
-todoToggleCompleted k (untag @"OnTodoToggleComplete" -> _) = updateTodos k
+    => TD.OnTodoToggleComplete (ReactId, W.UKey) -> Gadget cmd p (App Obj) ()
+todoToggleCompleted (untag @"OnTodoToggleComplete" -> (k, _)) = updateTodos k
 
 destroyTodo :: (AsReactor cmd)
-    => ReactId -> TD.OnTodoDestroy W.UKey -> Gadget cmd p (App Obj) ()
-destroyTodo k (untag @"OnTodoDestroy" -> i) =
+    => TD.OnTodoDestroy (ReactId, W.UKey) -> Gadget cmd p (App Obj) ()
+destroyTodo (untag @"OnTodoDestroy" -> (k, i)) =
     mutate k $ _todos.W._rawCollection.(at i) .= Nothing
 
 type OnTodoTicked = Tagged "OnTodoTicked"
 
 tickedTodo :: (AsReactor cmd)
-    => ReactId -> OnTodoTicked W.UKey -> Gadget cmd p (App Obj) ()
-tickedTodo k (untag @"OnTodoTicked" -> _) = updateTodos k
+    => OnTodoTicked (ReactId, W.UKey) -> Gadget cmd p (App Obj) ()
+tickedTodo (untag @"OnTodoTicked" -> (k, _)) = updateTodos k
 
 insertTodo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => ReactId -> OnNewTodo J.JSString -> Gadget cmd p (App Obj) (Which '[TD.OnTodoToggleComplete W.UKey, TD.OnTodoDestroy W.UKey, OnTodoTicked W.UKey])
-insertTodo k (untag @"OnNewTodo" -> n) = do
+    => OnNewTodo (ReactId, J.JSString) -> Gadget cmd p (App Obj)
+        (Which '[TD.OnTodoToggleComplete (ReactId, W.UKey), TD.OnTodoDestroy (ReactId, W.UKey), OnTodoTicked (ReactId, W.UKey)])
+insertTodo (untag @"OnNewTodo" -> (k, n)) = do
     s <- getModel
     let mi = view (_todos.W._rawCollection.to lookupMax) s
         i' = case mi of
@@ -227,14 +228,15 @@ insertTodo k (untag @"OnNewTodo" -> n) = do
   where
     lookupMax = listToMaybe . M.toDescList
     todo' = TD.todo
-        & chooseWith also $ (onMutated $ const $ pure $ pickOnly $ Tagged @"OnTodoTicked" ())
-    go :: W.UKey -> Which '[TD.OnTodoToggleComplete (), TD.OnTodoDestroy (), OnTodoTicked ()] -> Which '[TD.OnTodoToggleComplete W.UKey, TD.OnTodoDestroy W.UKey, OnTodoTicked W.UKey]
-    go i y = afmap (CaseFunc1 @C0 @Functor @C0 (fmap (const i))) y
+        & chooseWith also $ (onMutated $ \k' -> pure $ pickOnly $ Tagged @"OnTodoTicked" k')
+    go :: W.UKey -> Which '[TD.OnTodoToggleComplete ReactId, TD.OnTodoDestroy ReactId, OnTodoTicked ReactId]
+        -> Which '[TD.OnTodoToggleComplete (ReactId, W.UKey), TD.OnTodoDestroy (ReactId, W.UKey), OnTodoTicked (ReactId, W.UKey)]
+    go i y = afmap (CaseFunc1_ @C0 @Functor @C0 @(ReactId, W.UKey) (fmap (\k' -> (k', i)))) y
 
 insertTodo' :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => ReactId -> OnNewTodo J.JSString -> Gadget cmd p (App Obj) r
-insertTodo' k a = insertTodo k a
-    >>= (injectedK $ totally . finish . todoToggleCompleted k . obvious)
-    >>= (injectedK $ totally . finish . destroyTodo k . obvious)
-    >>= (injectedK $ totally . finish . tickedTodo k . obvious)
+    => OnNewTodo (ReactId, J.JSString) -> Gadget cmd p (App Obj) r
+insertTodo' a = insertTodo a
+    >>= (injectedK $ totally . finish . todoToggleCompleted . obvious)
+    >>= (injectedK $ totally . finish . destroyTodo . obvious)
+    >>= (injectedK $ totally . finish . tickedTodo . obvious)
     & fmap impossible
