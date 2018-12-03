@@ -52,8 +52,9 @@ extra-deps:
   commit: HEAD
 - lens-misc-0.0.2.0
 - javascript-extras-0.5.0.0
-- alternators-1.0.0.0
+# - alternators-1.0.0.0
 # - data-diverse-4.6.0.0
+- '/Users/louis/repo/hs/alternators'
 - '/Users/louis/repo/hs/data-diverse'
 - data-diverse-lens-4.3.0.0
 - ghcjs-base-stub-0.2.0.0

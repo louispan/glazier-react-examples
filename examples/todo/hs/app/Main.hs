@@ -64,8 +64,8 @@ maybeExecApp executor c =
 main :: IO ()
 main = do
     root <- js_getElementById "root"
-    rEnv <- mkReactorEnvIO
-    (`runReaderT` rEnv) $ startApp
+    env <- mkReactorEnvIO
+    (`runReaderT` env) $ startApp
         execApp
         wid
         (TD.App "" (W.DynamicCollection TD.All () mempty mempty))
