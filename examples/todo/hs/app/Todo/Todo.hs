@@ -9,9 +9,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-
 module Todo.Todo
     ( Todo(..)
     , _value
@@ -22,6 +19,7 @@ module Todo.Todo
     , todo
     ) where
 
+import Glazier.Command
 import Control.Lens
 import Control.Lens.Misc
 import Data.Diverse.Profunctor
@@ -36,19 +34,6 @@ import Glazier.React.Effect.JavaScript
 import qualified Glazier.React.Widgets.Input as W
 import qualified JavaScript.Extras as JE
 
-
-class Monad m => Dispatch a r t m where
-    dispatch :: m a -> t m r
-
-newtype Wack m a = Wack (m a)
-    deriving (Functor, Applicative, Monad)
-
--- instance Dispatch ReactId Wack m (InputChange ReactId) where
---     dispatch k m = Wack $ do
---         a <- m
-        
-
-
 data Todo = Todo
     { value :: J.JSString
     , completed :: Bool
@@ -61,21 +46,12 @@ type OnTodoDestroy = Tagged "OnTodoDestroy"
 type OnTodoToggleComplete = Tagged "OnTodoToggleComplete"
 type OnTodoStartEdit = Tagged "OnTodoStartEdit"
 
-todoToggleComplete :: (AsReactor cmd) => ReactId -> Widget cmd p Todo (OnTodoToggleComplete ReactId)
+todoToggleComplete :: (AsReactor cmd) => ReactId -> Widget cmd o Todo (OnTodoToggleComplete ReactId)
 todoToggleComplete k =
     let wid = (retag @"InputChange" @_ @"OnTodoToggleComplete") <$> overWindow fw (W.checkboxInput k)
     in magnifyWidget _completed wid
   where
     fw = (modifyMarkup (overSurfaceProperties (`DL.snoc` ("className", "toggle"))))
-
--- todoToggleComplete2 ::
---     ( AsReactor cmd
---     , m ~ Widget cmd o Todo
---     , Dispatch (OnTodoToggleComplete ReactId) r t m
---     )
---     => ReactId -> t m r
--- todoToggleComplete2 k = dispatch $ todoToggleComplete k
-
 
 todoDestroy :: (AsReactor cmd) => ReactId -> Widget cmd p s (OnTodoDestroy ReactId)
 todoDestroy k =
@@ -84,14 +60,6 @@ todoDestroy k =
             , ("className", "destroy")]
         gad = trigger_ k "onClick" (Tagged @"OnTodoDestroy" k)
     in (display win) `also` (lift gad)
-
--- todoDestroy2 ::
---     ( AsReactor cmd
---     , m ~ Widget cmd o Todo
---     , Dispatch (OnTodoDestroy ReactId) r t m
---     )
---     => ReactId -> t m r
--- todoDestroy2 k = dispatch $ todoDestroy k
 
 
 todoLabel :: (AsReactor cmd) => ReactId -> Widget cmd p Todo (OnTodoStartEdit ReactId)
@@ -118,30 +86,6 @@ todoView =
                         *> todoLabelWin'
                         *> todoDestroyWin'
     in wid
-
-
--- todoView2 ::
---     ( AsReactor cmd
---     , Dispatch (OnTodoToggleComplete ReactId) r t m
---     , Dispatch (OnTodoDestroy ReactId) r t m
---     , Dispatch (OnTodoStartEdit ReactId) r t m
---     , m ~ Widget cmd o Todo
---     )
---     => t m r
--- todoView2 =
---     let todoToggleComplete' = (mkReactId "toggle" >>= dispatch . todoToggleComplete)
---         todoDestroy' = (mkReactId "destroy" >>= dispatch . todoDestroy)
---         todoLabel' = (mkReactId "label" >>= dispatch . todoLabel)
---         wid = withWindow todoToggleComplete' $ \todoToggleCompleteWin' ->
---             withWindow todoDestroy' $ \todoDestroyWin' ->
---             withWindow todoLabel' $ \todoLabelWin' ->
---                 display $ bh "div"
---                     [ ("key", "view")
---                     , ("className", "view")] $
---                         todoToggleCompleteWin'
---                         *> todoLabelWin'
---                         *> todoDestroyWin'
---     in wid
 
 todoInput :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd) => ReactId -> Widget cmd p Todo (OnTodoDestroy ReactId)
 todoInput k =

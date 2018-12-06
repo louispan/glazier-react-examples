@@ -1,15 +1,10 @@
 {-# LANGUAGE DataKinds #-}
--- {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
--- {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
--- {-# LANGUAGE FunctionalDependencies #-}
--- {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
--- {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
@@ -46,9 +41,8 @@ import qualified Todo.Todo as TD
 todoSorter :: Applicative m => srt -> a -> a -> m Ordering
 todoSorter _ _ _ = pure LT
 
-todoFilterer :: TD.Filter -> TD.Todo -> ReadIORef Bool
+todoFilterer :: Applicative m => TD.Filter -> TD.Todo -> m Bool
 todoFilterer ftr td = do
-    -- scn <- doReadIORef $ modelRef obj
     pure $ case ftr of
         TD.All -> True
         TD.Active -> not $ TD.completed $ td
@@ -63,9 +57,9 @@ makeLenses_ ''App
 
 type OnNewTodo = Tagged "OnNewTodo"
 
-newTodoInput :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => ReactId -> Widget cmd p J.JSString (OnNewTodo (ReactId, J.JSString))
-newTodoInput k =
+todoInput :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+    => ReactId -> ReactId -> Widget cmd p J.JSString (OnNewTodo (ReactId, J.JSString))
+todoInput onNewTodoK k =
     let wid = finish . void . overWindow fw $ W.textInput k
     in wid `also` lift gad
   where
@@ -100,7 +94,7 @@ newTodoInput k =
                         finish $ pure ()
                     else do
                         debugIO_ $ putStrLn "new todo entered"
-                        pure $ Tagged @"OnNewTodo" (k, v')
+                        pure $ Tagged @"OnNewTodo" (onNewTodoK, v')
 
             "Escape" -> finish $ mutate k $ id .= J.empty
 
@@ -117,7 +111,7 @@ appToggleCompleteAll k =
             (finish $ hdlChange)
     in (display win) `also` (lift gad)
   where
-    mkProps :: Model (TD.TodoCollection Obj) -> ReadIORef [JE.Property]
+    mkProps :: Model (TD.TodoCollection Obj) -> Benign IO [JE.Property]
     mkProps scn = traverse sequenceA
         [ ("key", pure $ reactIdKey' k)
         , ("className", pure "toggle-all")
@@ -125,11 +119,11 @@ appToggleCompleteAll k =
         , ("checked", JE.toJSR <$> (hasActiveTodos (scn ^. _model.W._visibleList)))
         ]
 
-    hasActiveTodos :: [Obj TD.Todo] -> ReadIORef Bool
+    hasActiveTodos :: [Obj TD.Todo] -> Benign IO Bool
     hasActiveTodos = fmap getAny . getAp . foldMap go
       where
         go obj = Ap $ do
-            scn <- doReadIORef $ modelRef obj
+            scn <- benignReadIORef $ modelRef obj
             pure $ Any $ scn ^. _model.TD._completed
 
     hdlChange :: (AsReactor cmd) => Gadget cmd p (TD.TodoCollection Obj) ()
@@ -146,15 +140,16 @@ appToggleCompleteAll k =
             lift $ gadgetWith' obj (mutate k $ TD._completed .= not a)
 
 app_ :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => JE.JSRep -> ReactId -> Widget cmd p (App Obj) (OnNewTodo (ReactId, J.JSString))
-app_ j todosK = do
-    newTodoK <- mkReactId "new-todo"
-    let newTodo' = magnifyWidget _newTodo $ newTodoInput newTodoK
+    => JE.JSRep -> Widget cmd p (App Obj) (OnNewTodo (ReactId, J.JSString))
+app_ j = do
+    todoInputK <- mkReactId "todo-input"
+    todoListK <- mkReactId "todo-list"
+    let newTodo' = magnifyWidget _newTodo $ todoInput todoListK todoInputK
         appToggleCompleteAll' = magnifyWidget _todos $ mkReactId "complete-all" >>= appToggleCompleteAll
         todoFooter' = magnifyWidget _todos $ mkReactId "todo-footer" >>= TD.todoFooter j
         todosWindow = modifyMarkup (overSurfaceProperties
             (<> [("className", "todo-list")]))
-            (W.dynamicCollectionWindow todosK)
+            (W.dynamicCollectionWindow todoListK)
         wid = withWindow newTodo' $ \newTodoWin ->
             withWindow appToggleCompleteAll' $ \appToggleCompleteAllWin ->
             withWindow todoFooter' $ \todoFooterWin ->
@@ -186,22 +181,20 @@ app_ j todosK = do
             -- FIXME: don't update visible if k is from new-todo
             put "App Mutated"
             onMutated $ \k ->
-                -- ignore updates from the new-todo input box
-                if k == newTodoK
+                -- ignore updates from the new-todo input box while typing
+                if k == todoInputK
                     then pure ()
                     else updateTodos k
     wid `also` (lift gad)
+
+app :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
+    => JE.JSRep -> Widget cmd p (App Obj) r
+app j = app_ j >>= (lift . insertTodo')
 
 updateTodos :: (AsReactor cmd)
     => ReactId -> Gadget cmd p (App Obj) ()
 updateTodos k = magnifiedEntity _todos $
     mutate k $ W.updateVisibleList todoFilterer todoSorter
-
-app :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => JE.JSRep -> Widget cmd p (App Obj) r
-app j = do
-    todosK <- mkReactId "todo-list"
-    app_ j todosK >>= (lift . insertTodo' todosK)
 
 todoToggleCompleted :: (AsReactor cmd)
     => TD.OnTodoToggleComplete (ReactId, W.UKey) -> Gadget cmd p (App Obj) ()
@@ -219,29 +212,39 @@ tickedTodo :: (AsReactor cmd)
 tickedTodo (untag @"OnTodoMutated" -> (k, _)) = updateTodos k
 
 insertTodo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => ReactId -> OnNewTodo (ReactId, J.JSString) -> Gadget cmd p (App Obj)
+    => OnNewTodo (ReactId, J.JSString) -> Gadget cmd p (App Obj)
         (Which '[TD.OnTodoToggleComplete (ReactId, W.UKey), TD.OnTodoDestroy (ReactId, W.UKey), OnTodoMutated (ReactId, W.UKey)])
-insertTodo todosK (untag @"OnNewTodo" -> (_, n)) = do
+insertTodo (untag @"OnNewTodo" -> (k, v)) = do
     s <- getModel
     let mi = view (_todos.W._rawCollection.to lookupMax) s
         i' = case mi of
             Just (i, _) -> W.largerUKey i
             Nothing -> W.zeroUKey
     put "New todo"
-    -- use todosK for mutate so app can have a more efficient onMutated
-    withMkObj (go i' <$> todo') (TD.Todo n False False) $ \obj ->
-        mutate todosK $ _todos.W._rawCollection.(at i') .= Just obj
+    withMkObj (decorateTodoEvents i' <$> todo') (TD.Todo v False False) $ \obj ->
+        mutate k $ _todos.W._rawCollection.(at i') .= Just obj
   where
     lookupMax = listToMaybe . M.toDescList
     todo' = TD.todo
-        & chooseWith also $ (onMutated $ \k' -> pure $ pickOnly $ Tagged @"OnTodoMutated" k')
-    go :: W.UKey -> Which '[TD.OnTodoToggleComplete ReactId, TD.OnTodoDestroy ReactId, OnTodoMutated ReactId]
-        -> Which '[TD.OnTodoToggleComplete (ReactId, W.UKey), TD.OnTodoDestroy (ReactId, W.UKey), OnTodoMutated (ReactId, W.UKey)]
-    go i y = afmap (CaseFunc1_ @C0 @Functor @C0 @(ReactId, W.UKey) (fmap (\k' -> (k', i)))) y
+        & chooseWith also $ (onMutated $ pure . pickOnly . Tagged @"OnTodoMutated")
+
+decorateTodoEvents :: W.UKey -> Which '[TD.OnTodoToggleComplete ReactId, TD.OnTodoDestroy ReactId, OnTodoMutated ReactId]
+    -> Which '[TD.OnTodoToggleComplete (ReactId, W.UKey), TD.OnTodoDestroy (ReactId, W.UKey), OnTodoMutated (ReactId, W.UKey)]
+decorateTodoEvents i = which $ cases
+    $ decorateOnTodoToggleComplete
+    ./ decorateOnTodoDestroy
+    ./ decorateOnTodoMutated
+    ./ nil
+  where
+    -- _id avoids using NoMonomorphismRestriction
+    _id = id @(Which '[TD.OnTodoToggleComplete (ReactId, W.UKey), TD.OnTodoDestroy (ReactId, W.UKey), OnTodoMutated (ReactId, W.UKey)])
+    decorateOnTodoToggleComplete (untag @"OnTodoToggleComplete" @ReactId -> k) = _id $ pickTag @"OnTodoToggleComplete" (k, i)
+    decorateOnTodoDestroy (untag @"OnTodoDestroy" @ReactId -> k) = _id $ pickTag @"OnTodoDestroy" (k, i)
+    decorateOnTodoMutated (untag @"OnTodoMutated" @ReactId -> k) = _id $ pickTag @"OnTodoMutated" (k, i)
 
 insertTodo' :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => ReactId -> OnNewTodo (ReactId, J.JSString) -> Gadget cmd p (App Obj) r
-insertTodo' todosK a = insertTodo todosK a
+    => OnNewTodo (ReactId, J.JSString) -> Gadget cmd p (App Obj) r
+insertTodo' newTodoVal = insertTodo newTodoVal
     >>= (injectedK $ totally . finish . todoToggleCompleted . obvious)
     >>= (injectedK $ totally . finish . destroyTodo . obvious)
     >>= (injectedK $ totally . finish . tickedTodo . obvious)

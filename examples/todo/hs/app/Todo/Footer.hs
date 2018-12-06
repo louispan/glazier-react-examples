@@ -39,7 +39,7 @@ todoDisplay k = do
     s <- ask
     let xs = s ^. (_model.W._rawCollection.to toList)
         isActive obj = do
-            td <- doReadIORef (modelRef obj)
+            td <- benignReadIORef (modelRef obj)
             pure $ td ^. _model.TD._completed
     (completed, active) <- lift $ LM.partitionM isActive xs
     let completedCount = length @[] completed
@@ -108,7 +108,7 @@ hdlClearCompleted k = do
         W._visibleList .= ys'
   where
     ftr x = do
-        x' <- doReadIORef $ modelRef x
+        x' <- benignReadIORef $ modelRef x
         pure $ x' ^. _model.TD._completed.to not
 
 hdlHashChange :: (AsReactor cmd) => ReactId -> JE.JSRep -> Gadget cmd p (TodoCollection Obj) ()
