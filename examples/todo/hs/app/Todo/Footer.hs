@@ -86,8 +86,8 @@ todoDisplay k = do
            else alsoZero
 
 -- | The 'JE.JSRep' arg should be @document.defaultView@ or @window@
-todoFooter :: (AsReactor cmd, AsJavascript cmd)
-    => JE.JSRep -> ReactId -> Widget cmd p (TodoCollection Obj) r
+todoFooter :: (AsReactor c, AsJavascript c)
+    => JE.JSRep -> ReactId -> Widget c o (TodoCollection Obj) r
 todoFooter j k =
     let win = todoDisplay k
         gad = (finish $ hdlHashChange k j)
@@ -96,7 +96,7 @@ todoFooter j k =
     in (display win) `also` (lift gad)
   where
 
-hdlClearCompleted :: (AsReactor cmd) => ReactId -> Gadget cmd p (TodoCollection Obj) ()
+hdlClearCompleted :: (AsReactor c) => ReactId -> Gadget c o (TodoCollection Obj) ()
 hdlClearCompleted k = do
     trigger_ k "onClick" ()
     mutate k $ do
@@ -111,17 +111,17 @@ hdlClearCompleted k = do
         x' <- benignReadIORef $ modelRef x
         pure $ x' ^. _model.TD._completed.to not
 
-hdlHashChange :: (AsReactor cmd) => ReactId -> JE.JSRep -> Gadget cmd p (TodoCollection Obj) ()
+hdlHashChange :: (AsReactor c) => ReactId -> JE.JSRep -> Gadget c o (TodoCollection Obj) ()
 hdlHashChange k j = do
     ftr <- mapHashChange <$> domTrigger j "hashchange" whenHashChange
     mutate k $ W._filterCriteria .= ftr
 
 -- | The 'JE.JSRep' arg should be @document.defaultView@ or @window@
 hdlMounted ::
-    ( AsReactor cmd
-    , AsJavascript cmd
+    ( AsReactor c
+    , AsJavascript c
     )
-    => ReactId -> JE.JSRep -> Gadget cmd p (TodoCollection Obj) ()
+    => ReactId -> JE.JSRep -> Gadget c o (TodoCollection Obj) ()
 hdlMounted k j = onMounted $ do
     (`evalMaybeT` ()) $ do
         h <- (eval' $ GetProperty "location" j) >>= maybeGetProperty "hash"

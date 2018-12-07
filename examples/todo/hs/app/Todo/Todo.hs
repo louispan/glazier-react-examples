@@ -46,14 +46,14 @@ type OnTodoDestroy = Tagged "OnTodoDestroy"
 type OnTodoToggleComplete = Tagged "OnTodoToggleComplete"
 type OnTodoStartEdit = Tagged "OnTodoStartEdit"
 
-todoToggleComplete :: (AsReactor cmd) => ReactId -> Widget cmd o Todo (OnTodoToggleComplete ReactId)
+todoToggleComplete :: (AsReactor c) => ReactId -> Widget c o Todo (OnTodoToggleComplete ReactId)
 todoToggleComplete k =
     let wid = (retag @"InputChange" @_ @"OnTodoToggleComplete") <$> overWindow fw (W.checkboxInput k)
     in magnifyWidget _completed wid
   where
     fw = (modifyMarkup (overSurfaceProperties (`DL.snoc` ("className", "toggle"))))
 
-todoDestroy :: (AsReactor cmd) => ReactId -> Widget cmd p s (OnTodoDestroy ReactId)
+todoDestroy :: (AsReactor c) => ReactId -> Widget c o s (OnTodoDestroy ReactId)
 todoDestroy k =
     let win = lf' k "button"
             [ ("key", "destroy")
@@ -62,7 +62,7 @@ todoDestroy k =
     in (display win) `also` (lift gad)
 
 
-todoLabel :: (AsReactor cmd) => ReactId -> Widget cmd p Todo (OnTodoStartEdit ReactId)
+todoLabel :: (AsReactor c) => ReactId -> Widget c o Todo (OnTodoStartEdit ReactId)
 todoLabel k =
     let win = do
             str <- view (_model._value)
@@ -71,7 +71,7 @@ todoLabel k =
         gad = trigger_ k "onDoubleClick" (Tagged @"OnTodoStartEdit" k)
     in (display win) `also` (lift gad)
 
-todoView :: (AsReactor cmd) => Widget cmd p Todo (Which '[OnTodoToggleComplete ReactId, OnTodoDestroy ReactId, OnTodoStartEdit ReactId])
+todoView :: (AsReactor c) => Widget c o Todo (Which '[OnTodoToggleComplete ReactId, OnTodoDestroy ReactId, OnTodoStartEdit ReactId])
 todoView =
     let todoToggleComplete' = pickOnly <$> (mkReactId "toggle" >>= todoToggleComplete)
         todoDestroy' = pickOnly <$> (mkReactId "destroy" >>= todoDestroy)
@@ -79,7 +79,7 @@ todoView =
         wid = withWindow' todoToggleComplete' $ \todoToggleCompleteWin' ->
             withWindow' todoDestroy' $ \todoDestroyWin' ->
             withWindow' todoLabel' $ \todoLabelWin' ->
-                totally $ display $ bh "div"
+                display' $ bh "div"
                     [ ("key", "view")
                     , ("className", "view")] $
                         todoToggleCompleteWin'
@@ -87,7 +87,7 @@ todoView =
                         *> todoDestroyWin'
     in wid
 
-todoInput :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd) => ReactId -> Widget cmd p Todo (OnTodoDestroy ReactId)
+todoInput :: (AsReactor c, AsJavascript c, AsHTMLElement c) => ReactId -> Widget c o Todo (OnTodoDestroy ReactId)
 todoInput k =
     let wid = overWindow fw . magnifyWidget _value $ W.textInput k
         wid' = finish (void wid) `also` lift gad
@@ -97,14 +97,14 @@ todoInput k =
     gad = (finish hdlBlur)
         `also` hdlKeyDown
 
-    hdlBlur :: (AsReactor cmd) => Gadget cmd p Todo ()
+    hdlBlur :: (AsReactor c) => Gadget c o Todo ()
     hdlBlur = do
         trigger_ k "onBlur" ()
         mutate k $ do
             _editing .= False
             _value %= J.strip
 
-    hdlKeyDown :: (AsReactor cmd, AsHTMLElement cmd) => Gadget cmd p Todo (OnTodoDestroy ReactId)
+    hdlKeyDown :: (AsReactor c, AsHTMLElement c) => Gadget c o Todo (OnTodoDestroy ReactId)
     hdlKeyDown = do
         (KeyDownKey _ key) <- trigger k "onKeyDown" fireKeyDownKey
         case key of
@@ -128,8 +128,8 @@ todoInput k =
 
             _ -> finish $ pure ()
 
-todo :: (AsReactor cmd, AsJavascript cmd, AsHTMLElement cmd)
-    => Widget cmd p Todo (Which '[OnTodoToggleComplete ReactId, OnTodoDestroy ReactId])
+todo :: (AsReactor c, AsJavascript c, AsHTMLElement c)
+    => Widget c o Todo (Which '[OnTodoToggleComplete ReactId, OnTodoDestroy ReactId])
 todo = do
     k <- mkReactId "input"
     let todoInput' = pickOnly <$> todoInput k
@@ -146,8 +146,8 @@ todo = do
             ]
             win
 
-    hdlStartEdit :: (AsHTMLElement cmd, AsJavascript cmd, AsReactor cmd)
-        => ReactId -> OnTodoStartEdit ReactId -> Gadget cmd p Todo ()
+    hdlStartEdit :: (AsHTMLElement c, AsJavascript c, AsReactor c)
+        => ReactId -> OnTodoStartEdit ReactId -> Gadget c o Todo ()
     hdlStartEdit k (untag @"OnTodoStartEdit" -> _) = do
         mutate k $ _editing .= True
         j <- getElementalRef k

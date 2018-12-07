@@ -22,7 +22,7 @@ executable glazier-react-todo
                        Todo.Footer
   main-is:             Main.hs
   ghc-options:         -Wall -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
-  cpp-options:         -DGHCJS_BROWSER -DREACT_DEBUG
+  cpp-options:         -DGHCJS_BROWSER -DDEBUG_GLAZIER
   build-depends:       base >= 4.7 && < 5
                      , alternators >= 1.0.1
                      , containers >= 0.5

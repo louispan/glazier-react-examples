@@ -31,7 +31,7 @@ import qualified Todo.Filter as TD
 newtype AppCmd = AppCmd { unAppCmd :: Which (CmdTypes AppCmd AppCmd)}
     -- deriving Show
 -- The main app will need IO effects in order to get the initial state via MVar.
-type instance CmdTypes AppCmd cmd = '[IO cmd, [cmd], ReactorCmd cmd, HTMLElementCmd, JavaScriptCmd cmd]
+type instance CmdTypes AppCmd c = '[IO c, [c], ReactorCmd c, HTMLElementCmd, JavaScriptCmd c]
 
 -- | Define AsFacet instances for all types in the variant
 -- UndecidableInstances!
@@ -42,12 +42,12 @@ maybeExecApp ::
     ( MonadUnliftIO m
     , MonadReader r m
     , Has ReactorEnv r
-    , AsFacet (IO cmd) cmd
-    , AsReactor cmd
-    , AsJavascript cmd
-    , AsHTMLElement cmd
+    , AsFacet (IO c) c
+    , AsReactor c
+    , AsJavascript c
+    , AsHTMLElement c
     )
-    => (cmd -> m ()) -> cmd -> MaybeT m (Proxy '[[cmd], ReactorCmd cmd, JavaScriptCmd cmd, HTMLElementCmd, IO cmd], [cmd])
+    => (c -> m ()) -> c -> MaybeT m (Proxy '[[c], ReactorCmd c, JavaScriptCmd c, HTMLElementCmd, IO c], [c])
 maybeExecApp executor c =
     maybeExec (done (traverse_ @[] executor)) c
     `orMaybeExec` maybeExec (execReactorCmd executor) c
