@@ -19,7 +19,6 @@ module Todo.Todo
     , todo
     ) where
 
-import Glazier.Command
 import Control.Lens
 import Control.Lens.Misc
 import Data.Diverse.Profunctor
@@ -124,7 +123,7 @@ todoInput k =
 
             "Escape" -> finish $ do
                 j <- getElementalRef k
-                exec $ Blur j -- The onBlur handler will trim the value
+                blur j -- The onBlur handler will trim the value
 
             _ -> finish $ pure ()
 
@@ -152,9 +151,9 @@ todo = do
         mutate k $ _editing .= True
         j <- getElementalRef k
         onNextRendered $ do
-            exec $ Focus j
+            focus j
             (`evalMaybeT` ()) $ do
-                v <- maybeGetProperty "value" j
+                v <- MaybeT $ JE.fromJSR <$> getProperty "value" j
                 let i = J.length v
-                exec' $ SetProperty ("selectionStart", JE.toJSR (0 :: Int)) j
-                exec' $ SetProperty ("selectionEnd", JE.toJSR i) j
+                setProperty ("selectionStart", JE.toJSR (0 :: Int)) j
+                setProperty ("selectionEnd", JE.toJSR i) j

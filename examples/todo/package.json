@@ -12,7 +12,7 @@
     "react-dom": "^15.4.2",
     "todomvc-app-css": "2.0.0",
     "todomvc-common": "^1.0.1",
-    "javascript-stringify": "^1.6.0"
+    "javascript-stringify": "file:../../../javascript-stringify"
   },
   "scripts": {
     "start": "react-scripts start",

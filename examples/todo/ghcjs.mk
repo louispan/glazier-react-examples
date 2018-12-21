@@ -26,7 +26,7 @@ GHCJS_PROJECT_OUT := $(GHCJS_INSTALL_ROOT)/bin/$(PROJECT_NAME).jsexe
 .PHONY: ghcjs.mk $(BUILD_DIR) clean
 
 ghcjs.mk: $(PROJECT_ROOT)/stack.ghcjs.yaml
-	stack --stack-yaml $(PROJECT_ROOT)/stack.ghcjs.yaml build
+	stack --stack-yaml $(PROJECT_ROOT)/stack.ghcjs.yaml build --flag glazier-react:Debug
 	@# touch ghcjs.mk which is included, forcing Makefile to revaluate targets with new timestamps
 	@touch ghcjs.mk
 

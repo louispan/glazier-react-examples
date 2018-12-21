@@ -57,6 +57,8 @@ makeLenses_ ''App
 
 type OnNewTodo = Tagged "OnNewTodo"
 
+-- | Use a different ReactId when firing OnNewTodo so that it is easier
+-- to differentiate between onChanged typing events and new todo event.
 todoInput :: (AsReactor c, AsJavascript c, AsHTMLElement c)
     => ReactId -> ReactId -> Widget c o J.JSString (OnNewTodo (ReactId, J.JSString))
 todoInput onNewTodoK k =
@@ -129,7 +131,7 @@ appToggleCompleteAll k =
     hdlChange :: (AsReactor c) => Gadget c o (TD.TodoCollection Obj) ()
     hdlChange = do
         trigger_ k "onChange" ()
-        put "App ToggleAll"
+        -- logWarn $ pure "App ToggleAll"
         mutateThen k $ do
             s <- get
             a <- lift $ hasActiveTodos (s ^. W._visibleList)
@@ -137,7 +139,7 @@ appToggleCompleteAll k =
       where
         go a obj = Als $ do
             -- lift from ContT to GadgetT
-            lift $ gadgetWith' obj (mutate k $ TD._completed .= not a)
+            lift . gadgetWith obj . mutate k $ TD._completed .= not a
 
 app_ :: (AsReactor c, AsJavascript c, AsHTMLElement c)
     => JE.JSRep -> Widget c o (App Obj) (OnNewTodo (ReactId, J.JSString))
@@ -179,7 +181,9 @@ app_ j = do
         gad = finish $ do
             -- FIXME: this is being called on every keystroke in the input!
             -- FIXME: don't update visible if k is from new-todo
-            put "App Mutated"
+            debugIO_ $ putStrLn "__FILE__hello"
+            logError $ pure "App Mutated"
+            logInfo $ pure "Hello, world!"
             onMutated $ \k ->
                 -- ignore updates from the new-todo input box while typing
                 if k == todoInputK
@@ -220,7 +224,7 @@ insertTodo (untag @"OnNewTodo" -> (k, v)) = do
         i' = case mi of
             Just (i, _) -> W.largerUKey i
             Nothing -> W.zeroUKey
-    put "New todo"
+    -- logDebug $ pure "New todo"
     withMkObj (decorateTodoEvents i' <$> todo') (TD.Todo v False False) $ \obj ->
         mutate k $ _todos.W._rawCollection.(at i') .= Just obj
   where

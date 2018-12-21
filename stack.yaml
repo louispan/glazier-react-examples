@@ -51,13 +51,15 @@ extra-deps:
 - git: git@github.com:ghcjs/ghcjs-base.git
   commit: HEAD
 - lens-misc-0.0.2.0
-- javascript-extras-0.5.0.0
+# - javascript-extras-0.5.0.0
+- '/Users/louis/repo/js/javascript-extras'
 # - alternators-1.0.0.0
 - data-diverse-4.6.0.0
 - '/Users/louis/repo/hs/alternators'
 # - '/Users/louis/repo/hs/data-diverse'
 - data-diverse-lens-4.3.0.0
-- ghcjs-base-stub-0.2.0.0
+# - ghcjs-base-stub-0.2.0.0
+- '/Users/louis/repo/js/ghcjs-base-stub'
 - '/Users/louis/repo/hs/glazier'
 # - glazier-1.0.0.0
 # - glazier-react-1.0.0.0
@@ -72,7 +74,9 @@ extra-deps:
 - monadlist-0.0.2
 
 # Override default flag values for local packages and extra-deps
-# flags: {}
+flags:
+  glazier-react:
+    debug: true
 
 # Extra package databases containing global packages
 # extra-package-dbs: []
