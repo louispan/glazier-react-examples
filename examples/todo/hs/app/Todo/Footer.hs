@@ -21,6 +21,7 @@ module Todo.Footer
     ) where
 
 import Control.Lens
+import Data.UKey
 import qualified Control.Monad.ListM as LM
 import Data.Foldable
 import qualified Data.JSString as J
@@ -32,7 +33,7 @@ import qualified JavaScript.Extras as JE
 import qualified Todo.Filter as TD
 import qualified Todo.Todo as TD
 
-type TodoCollection = W.DynamicCollection TD.Filter () W.UKey TD.Todo
+type TodoCollection = W.DynamicCollection TD.Filter () UKey TD.Todo
 
 todoDisplay :: ReactId -> Window TodoCollection ()
 todoDisplay k = do

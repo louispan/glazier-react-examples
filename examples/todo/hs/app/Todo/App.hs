@@ -25,6 +25,7 @@ import Data.Maybe
 import Data.Monoid
 import Data.Semigroup.Applicative
 import Data.Tagged
+import Data.UKey
 import qualified GHC.Generics as G
 import Glazier.React
 import Glazier.React.Action.KeyDownKey
@@ -201,29 +202,29 @@ updateTodos k = magnifiedEntity _todos $
     mutate k $ W.updateVisibleList todoFilterer todoSorter
 
 todoToggleCompleted :: (AsReactor c)
-    => TD.OnTodoToggleComplete (ReactId, W.UKey) -> Gadget c o App ()
+    => TD.OnTodoToggleComplete (ReactId, UKey) -> Gadget c o App ()
 todoToggleCompleted (untag @"OnTodoToggleComplete" -> (k, _)) = updateTodos k
 
 destroyTodo :: (AsReactor c)
-    => TD.OnTodoDestroy (ReactId, W.UKey) -> Gadget c o App ()
+    => TD.OnTodoDestroy (ReactId, UKey) -> Gadget c o App ()
 destroyTodo (untag @"OnTodoDestroy" -> (k, i)) =
     mutate k $ _todos.W._rawCollection.(at i) .= Nothing
 
 type OnTodoMutated = Tagged "OnTodoMutated"
 
 tickedTodo :: (AsReactor c)
-    => OnTodoMutated (ReactId, W.UKey) -> Gadget c o App ()
+    => OnTodoMutated (ReactId, UKey) -> Gadget c o App ()
 tickedTodo (untag @"OnTodoMutated" -> (k, _)) = updateTodos k
 
 insertTodo :: (AsReactor c, AsJavascript c, AsHTMLElement c)
     => OnNewTodo (ReactId, J.JSString) -> Gadget c o App
-        (Which '[TD.OnTodoToggleComplete (ReactId, W.UKey), TD.OnTodoDestroy (ReactId, W.UKey), OnTodoMutated (ReactId, W.UKey)])
+        (Which '[TD.OnTodoToggleComplete (ReactId, UKey), TD.OnTodoDestroy (ReactId, UKey), OnTodoMutated (ReactId, UKey)])
 insertTodo (untag @"OnNewTodo" -> (k, v)) = do
     s <- getModel
     let mi = view (_todos.W._rawCollection.to lookupMax) s
         i' = case mi of
-            Just (i, _) -> W.largerUKey i
-            Nothing -> W.zeroUKey
+            Just (i, _) -> largerUKey i
+            Nothing -> zeroUKey
     -- logDebug $ pure "New todo"
     withMkObj (decorateTodoEvents i' <$> todo') (TD.Todo v False False) $ \obj ->
         mutate k $ _todos.W._rawCollection.(at i') .= Just obj
@@ -232,8 +233,8 @@ insertTodo (untag @"OnNewTodo" -> (k, v)) = do
     todo' = TD.todo
         & chooseWith also $ (onMutated $ pure . pickOnly . Tagged @"OnTodoMutated")
 
-decorateTodoEvents :: W.UKey -> Which '[TD.OnTodoToggleComplete ReactId, TD.OnTodoDestroy ReactId, OnTodoMutated ReactId]
-    -> Which '[TD.OnTodoToggleComplete (ReactId, W.UKey), TD.OnTodoDestroy (ReactId, W.UKey), OnTodoMutated (ReactId, W.UKey)]
+decorateTodoEvents :: UKey -> Which '[TD.OnTodoToggleComplete ReactId, TD.OnTodoDestroy ReactId, OnTodoMutated ReactId]
+    -> Which '[TD.OnTodoToggleComplete (ReactId, UKey), TD.OnTodoDestroy (ReactId, UKey), OnTodoMutated (ReactId, UKey)]
 decorateTodoEvents i = which $ cases
     $ decorateOnTodoToggleComplete
     ./ decorateOnTodoDestroy
@@ -241,7 +242,7 @@ decorateTodoEvents i = which $ cases
     ./ nil
   where
     -- _id avoids using NoMonomorphismRestriction
-    _id = id @(Which '[TD.OnTodoToggleComplete (ReactId, W.UKey), TD.OnTodoDestroy (ReactId, W.UKey), OnTodoMutated (ReactId, W.UKey)])
+    _id = id @(Which '[TD.OnTodoToggleComplete (ReactId, UKey), TD.OnTodoDestroy (ReactId, UKey), OnTodoMutated (ReactId, UKey)])
     decorateOnTodoToggleComplete (untag @"OnTodoToggleComplete" @ReactId -> k) = _id $ pickTag @"OnTodoToggleComplete" (k, i)
     decorateOnTodoDestroy (untag @"OnTodoDestroy" @ReactId -> k) = _id $ pickTag @"OnTodoDestroy" (k, i)
     decorateOnTodoMutated (untag @"OnTodoMutated" @ReactId -> k) = _id $ pickTag @"OnTodoMutated" (k, i)
