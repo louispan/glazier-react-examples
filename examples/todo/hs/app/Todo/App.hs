@@ -48,9 +48,9 @@ todoFilterer ftr td = do
         TD.Active -> not $ TD.completed $ td
         TD.Completed -> TD.completed $ td
 
-data App f = App
+data App = App
     { newTodo :: J.JSString
-    , todos :: TD.TodoCollection f
+    , todos :: TD.TodoCollection
     } deriving (G.Generic)
 
 makeLenses_ ''App
@@ -103,7 +103,7 @@ todoInput onNewTodoK k =
             _ -> finish $ pure ()
 
 appToggleCompleteAll :: (AsReactor c)
-    => ReactId -> Widget c o (TD.TodoCollection Obj) r
+    => ReactId -> Widget c o TD.TodoCollection r
 appToggleCompleteAll k =
     let win = do
             scn <- ask
@@ -113,7 +113,7 @@ appToggleCompleteAll k =
             (finish $ hdlChange)
     in (display win) `also` (lift gad)
   where
-    mkProps :: Model (TD.TodoCollection Obj) -> Benign IO [JE.Property]
+    mkProps :: Model TD.TodoCollection -> Benign IO [JE.Property]
     mkProps scn = traverse sequenceA
         [ ("key", pure $ reactIdKey' k)
         , ("className", pure "toggle-all")
@@ -128,7 +128,7 @@ appToggleCompleteAll k =
             scn <- benignReadIORef $ modelRef obj
             pure $ Any $ scn ^. _model.TD._completed
 
-    hdlChange :: (AsReactor c) => Gadget c o (TD.TodoCollection Obj) ()
+    hdlChange :: (AsReactor c) => Gadget c o TD.TodoCollection ()
     hdlChange = do
         trigger_ k "onChange" ()
         -- logWarn $ pure "App ToggleAll"
@@ -142,7 +142,7 @@ appToggleCompleteAll k =
             lift . gadgetWith obj . mutate k $ TD._completed .= not a
 
 app_ :: (AsReactor c, AsJavascript c, AsHTMLElement c)
-    => JE.JSRep -> Widget c o (App Obj) (OnNewTodo (ReactId, J.JSString))
+    => JE.JSRep -> Widget c o App (OnNewTodo (ReactId, J.JSString))
 app_ j = do
     todoInputK <- mkReactId "todo-input"
     todoListK <- mkReactId "todo-list"
@@ -192,31 +192,31 @@ app_ j = do
     wid `also` (lift gad)
 
 app :: (AsReactor c, AsJavascript c, AsHTMLElement c)
-    => JE.JSRep -> Widget c o (App Obj) r
+    => JE.JSRep -> Widget c o App r
 app j = app_ j >>= (lift . insertTodo')
 
 updateTodos :: (AsReactor c)
-    => ReactId -> Gadget c o (App Obj) ()
+    => ReactId -> Gadget c o App ()
 updateTodos k = magnifiedEntity _todos $
     mutate k $ W.updateVisibleList todoFilterer todoSorter
 
 todoToggleCompleted :: (AsReactor c)
-    => TD.OnTodoToggleComplete (ReactId, W.UKey) -> Gadget c o (App Obj) ()
+    => TD.OnTodoToggleComplete (ReactId, W.UKey) -> Gadget c o App ()
 todoToggleCompleted (untag @"OnTodoToggleComplete" -> (k, _)) = updateTodos k
 
 destroyTodo :: (AsReactor c)
-    => TD.OnTodoDestroy (ReactId, W.UKey) -> Gadget c o (App Obj) ()
+    => TD.OnTodoDestroy (ReactId, W.UKey) -> Gadget c o App ()
 destroyTodo (untag @"OnTodoDestroy" -> (k, i)) =
     mutate k $ _todos.W._rawCollection.(at i) .= Nothing
 
 type OnTodoMutated = Tagged "OnTodoMutated"
 
 tickedTodo :: (AsReactor c)
-    => OnTodoMutated (ReactId, W.UKey) -> Gadget c o (App Obj) ()
+    => OnTodoMutated (ReactId, W.UKey) -> Gadget c o App ()
 tickedTodo (untag @"OnTodoMutated" -> (k, _)) = updateTodos k
 
 insertTodo :: (AsReactor c, AsJavascript c, AsHTMLElement c)
-    => OnNewTodo (ReactId, J.JSString) -> Gadget c o (App Obj)
+    => OnNewTodo (ReactId, J.JSString) -> Gadget c o App
         (Which '[TD.OnTodoToggleComplete (ReactId, W.UKey), TD.OnTodoDestroy (ReactId, W.UKey), OnTodoMutated (ReactId, W.UKey)])
 insertTodo (untag @"OnNewTodo" -> (k, v)) = do
     s <- getModel
@@ -247,7 +247,7 @@ decorateTodoEvents i = which $ cases
     decorateOnTodoMutated (untag @"OnTodoMutated" @ReactId -> k) = _id $ pickTag @"OnTodoMutated" (k, i)
 
 insertTodo' :: (AsReactor c, AsJavascript c, AsHTMLElement c)
-    => OnNewTodo (ReactId, J.JSString) -> Gadget c o (App Obj) r
+    => OnNewTodo (ReactId, J.JSString) -> Gadget c o App r
 insertTodo' newTodoVal = insertTodo newTodoVal
     >>= (injectedK $ totally . finish . todoToggleCompleted . obvious)
     >>= (injectedK $ totally . finish . destroyTodo . obvious)

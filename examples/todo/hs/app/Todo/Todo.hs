@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -21,6 +22,7 @@ module Todo.Todo
 
 import Control.Lens
 import Control.Lens.Misc
+import qualified Data.Aeson as A
 import Data.Diverse.Profunctor
 import qualified Data.DList as DL
 import qualified Data.JSString as J
@@ -32,6 +34,7 @@ import Glazier.React.Effect.HTMLElement
 import Glazier.React.Effect.JavaScript
 import qualified Glazier.React.Widgets.Input as W
 import qualified JavaScript.Extras as JE
+import JavaScript.Extras.Aeson.Instances ()
 
 data Todo = Todo
     { value :: J.JSString
@@ -41,9 +44,29 @@ data Todo = Todo
 
 makeLenses_ ''Todo
 
+instance A.ToJSON Todo where
+    toEncoding = A.genericToEncoding A.defaultOptions
+
+instance A.FromJSON Todo
+
 type OnTodoDestroy = Tagged "OnTodoDestroy"
 type OnTodoToggleComplete = Tagged "OnTodoToggleComplete"
 type OnTodoStartEdit = Tagged "OnTodoStartEdit"
+
+instance FromModel Todo where
+    mkEncoding Todo {..} = pure $ A.pairs
+        ( "value" A..= value
+        <> "completed" A..= completed
+        <> "editing" A..= editing
+        )
+
+instance ToModel Todo where
+    parseModelJSON = fmap pure . go
+      where
+        go = A.withObject "Todo" $ \v -> Todo
+            <$> v A..: "value"
+            <*> v A..: "completed"
+            <*> v A..: "editing"
 
 todoToggleComplete :: (AsReactor c) => ReactId -> Widget c o Todo (OnTodoToggleComplete ReactId)
 todoToggleComplete k =

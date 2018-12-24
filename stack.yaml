@@ -72,6 +72,7 @@ extra-deps:
 - unliftio-core-0.1.1.0
 - stm-2.4.5.0
 - monadlist-0.0.2
+- aeson-1.1.2.0
 
 # Override default flag values for local packages and extra-deps
 flags:
