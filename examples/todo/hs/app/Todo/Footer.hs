@@ -33,14 +33,14 @@ import qualified JavaScript.Extras as JE
 import qualified Todo.Filter as TD
 import qualified Todo.Todo as TD
 
-type TodoCollection = W.DynamicCollection TD.Filter () UKey TD.Todo
+type TodoCollection = W.DynamicCollection TD.Filter () UKey (Obj TD.Todo)
 
 todoDisplay :: ReactId -> Window TodoCollection ()
 todoDisplay k = do
     s <- ask
     let xs = s ^. (_model.W._rawCollection.to toList)
         isActive obj = do
-            td <- benignReadIORef (modelRef obj)
+            td <- benignReadIORef (sceneRef obj)
             pure $ td ^. _model.TD._completed
     (completed, active) <- lift $ LM.partitionM isActive xs
     let completedCount = length @[] completed
@@ -108,7 +108,7 @@ hdlClearCompleted k = do
         W._visibleList .= ys'
   where
     ftr x = do
-        x' <- benignReadIORef $ modelRef x
+        x' <- benignReadIORef $ sceneRef x
         pure $ x' ^. _model.TD._completed.to not
 
 hdlHashChange :: (AsReactor c) => ReactId -> JE.JSRep -> Gadget c o TodoCollection ()

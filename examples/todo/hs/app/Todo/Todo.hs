@@ -1,6 +1,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PolyKinds #-}
@@ -8,33 +10,29 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ViewPatterns #-}
+-- {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE RankNTypes #-}
 
-module Todo.Todo
-    ( Todo(..)
-    , _value
-    , _completed
-    , _editing
-    , OnTodoDestroy
-    , OnTodoToggleComplete
-    , todo
-    ) where
+module Todo.Todo where
+    -- ( Todo(..)
+    -- , _value
+    -- , _completed
+    -- , _editing
+    -- , TodoDestroy
+    -- , TodoToggleComplete
+    -- , todo
+    -- ) where
 
-import Control.Lens
-import Control.Lens.Misc
 import qualified Data.Aeson as A
-import Data.Diverse.Profunctor
-import qualified Data.DList as DL
+import qualified Data.Aeson.Applicative as A
+-- import qualified Data.DList as DL
 import qualified Data.JSString as J
-import Data.Tagged
 import qualified GHC.Generics as G
 import Glazier.React
 import Glazier.React.Action.KeyDownKey
 import Glazier.React.Effect.HTMLElement
 import Glazier.React.Effect.JavaScript
 import qualified Glazier.React.Widgets.Input as W
-import qualified JavaScript.Extras as JE
-import JavaScript.Extras.Aeson.Instances ()
 
 data Todo = Todo
     { value :: J.JSString
@@ -44,115 +42,140 @@ data Todo = Todo
 
 makeLenses_ ''Todo
 
-instance A.ToJSON Todo where
-    toEncoding = A.genericToEncoding A.defaultOptions
+instance A.ToJSON Todo where toEncoding = A.genericToEncoding A.defaultOptions
+instance Applicative m => A.AToJSON m Todo
+-- instance A.FromJSON Todo
+-- instance Applicative m => A.AFromJSON m Todo
 
-instance A.FromJSON Todo
+-- type OnTodoDestroy = Tagged "TodoDestroy"
+-- type OnTodoToggleComplete = Tagged "TodoToggleComplete"
+-- type OnTodoStartEdit = Tagged "TodoStartEdit"
+-- data TodoDestroy = TodoDestroy
+-- data TodoToggleComplete = TodoToggleComplete
+-- data TodoStartEdit = TodoStartEdit
 
-type OnTodoDestroy = Tagged "OnTodoDestroy"
-type OnTodoToggleComplete = Tagged "OnTodoToggleComplete"
-type OnTodoStartEdit = Tagged "OnTodoStartEdit"
+todoToggleComplete ::
+    ( HasCallStack
+    , AsReactor c
+    , MonadWidget c s m
+    , Observer (Tagged "TodoToggleComplete" ()) m
+    )
+    => Traversal' s Todo
+    -> m ()
+todoToggleComplete this = (retag' @"InputChange" @"TodoToggleComplete" @()) `reobserve`
+    W.checkboxInput (this._completed) [("className", strProp "toggle")] []
 
-instance FromModel Todo where
-    mkEncoding Todo {..} = pure $ A.pairs
-        ( "value" A..= value
-        <> "completed" A..= completed
-        <> "editing" A..= editing
-        )
-
-instance ToModel Todo where
-    parseModelJSON = fmap pure . go
-      where
-        go = A.withObject "Todo" $ \v -> Todo
-            <$> v A..: "value"
-            <*> v A..: "completed"
-            <*> v A..: "editing"
-
-todoToggleComplete :: (AsReactor c) => ReactId -> Widget c o Todo (OnTodoToggleComplete ReactId)
-todoToggleComplete k =
-    let wid = (retag @"InputChange" @_ @"OnTodoToggleComplete") <$> overWindow fw (W.checkboxInput k)
-    in magnifyWidget _completed wid
+todoDestroy ::
+    ( HasCallStack
+    , AsReactor c
+    , MonadWidget c s m
+    , Observer (Tagged "TodoDestroy" ()) m
+    )
+    => m ()
+todoDestroy =
+    lf "button"
+        [("key", strProp "destroy")
+        ,("className", strProp"destroy")]
+        [onClick]
   where
-    fw = (modifyMarkup (overSurfaceProperties (`DL.snoc` ("className", "toggle"))))
-
-todoDestroy :: (AsReactor c) => ReactId -> Widget c o s (OnTodoDestroy ReactId)
-todoDestroy k =
-    let win = lf' k "button"
-            [ ("key", "destroy")
-            , ("className", "destroy")]
-        gad = trigger_ k "onClick" (Tagged @"OnTodoDestroy" k)
-    in (display win) `also` (lift gad)
+    onClick = observe =<< trigger_ "onClick" (Tagged @"TodoDestroy" ())
 
 
-todoLabel :: (AsReactor c) => ReactId -> Widget c o Todo (OnTodoStartEdit ReactId)
-todoLabel k =
-    let win = do
-            str <- view (_model._value)
-            bh' k "label" [("key", "label")] $
-                txt str
-        gad = trigger_ k "onDoubleClick" (Tagged @"OnTodoStartEdit" k)
-    in (display win) `also` (lift gad)
-
-todoView :: (AsReactor c) => Widget c o Todo (Which '[OnTodoToggleComplete ReactId, OnTodoDestroy ReactId, OnTodoStartEdit ReactId])
-todoView =
-    let todoToggleComplete' = pickOnly <$> (mkReactId "toggle" >>= todoToggleComplete)
-        todoDestroy' = pickOnly <$> (mkReactId "destroy" >>= todoDestroy)
-        todoLabel' = pickOnly <$> (mkReactId "label" >>= todoLabel)
-        wid = withWindow' todoToggleComplete' $ \todoToggleCompleteWin' ->
-            withWindow' todoDestroy' $ \todoDestroyWin' ->
-            withWindow' todoLabel' $ \todoLabelWin' ->
-                display' $ bh "div"
-                    [ ("key", "view")
-                    , ("className", "view")] $
-                        todoToggleCompleteWin'
-                        *> todoLabelWin'
-                        *> todoDestroyWin'
-    in wid
-
-todoInput :: (AsReactor c, AsJavascript c, AsHTMLElement c) => ReactId -> Widget c o Todo (OnTodoDestroy ReactId)
-todoInput k =
-    let wid = overWindow fw . magnifyWidget _value $ W.textInput k
-        wid' = finish (void wid) `also` lift gad
-    in wid'
+todoLabel ::
+    ( HasCallStack
+    , AsReactor c
+    , MonadWidget c s m
+    , Observer (Tagged "TodoStartEdit" ()) m
+    )
+    => Traversal' s Todo
+    -> m ()
+todoLabel this = bh "label" [] [onDoubleClick] (rawTxt . view $ this._value)
   where
-    fw = (modifyMarkup (overSurfaceProperties (`DL.snoc` ("className", "edit"))))
-    gad = (finish hdlBlur)
-        `also` hdlKeyDown
+    onDoubleClick = observe =<< trigger_ "onDoubleClick" (Tagged @"TodoStartEdit" ())
 
-    hdlBlur :: (AsReactor c) => Gadget c o Todo ()
+todoInput ::
+    ( HasCallStack
+    , AsReactor c
+    , AsJavascript c
+    , AsHTMLElement c
+    , MonadWidget c s m
+    , Observer (Tagged "InputChange" ()) m
+    , Observer (Tagged "TodoDestroy" ()) m
+    )
+    => Traversal' s Todo
+    -> m ()
+todoInput this = W.textInput (this._value)
+    [("className", strProp "edit")]
+    [hdlBlur, hdlKeyDown]
+  where
     hdlBlur = do
-        trigger_ k "onBlur" ()
-        mutate k $ do
-            _editing .= False
-            _value %= J.strip
+        trigger_ "onBlur" ()
+        mutate $ do
+            this._editing .= False
+            this._value %= J.strip
 
-    hdlKeyDown :: (AsReactor c, AsHTMLElement c) => Gadget c o Todo (OnTodoDestroy ReactId)
     hdlKeyDown = do
-        (KeyDownKey _ key) <- trigger k "onKeyDown" fireKeyDownKey
+        (KeyDownKey _ key) <- trigger "onKeyDown" fireKeyDownKey
         case key of
             -- NB. Enter and Escape doesn't generate a onChange event
             -- So there is no adverse interation with W.input onChange
             -- updating the value under our feet.
-            "Enter" -> mutateThen k $ do
-                v <- use _value
+            "Enter" -> mutateThen $ do
+                v <- use (this._value)
                 let v' = J.strip v
                 if J.null v'
                     then
-                        pure $ pure $ Tagged @"OnTodoDestroy" k
+                        pure $ observe $ Tagged @"TodoDestroy" ()
                     else do
-                        _editing .= False
-                        _value .= v'
-                        pure $ finish $ pure ()
+                        this._editing .= False
+                        this._value .= v'
+                        pure $ pure ()
 
-            "Escape" -> finish $ do
-                j <- getElementalRef k
+            "Escape" -> do
+                j <- getReactRef
                 blur j -- The onBlur handler will trim the value
 
-            _ -> finish $ pure ()
+            _ -> pure ()
+
+
+todoView ::
+    ( HasCallStack
+    , AsReactor c
+    , MonadWidget c s m
+    , Observer (Tagged "TodoToggleComplete" ()) m
+    , Observer (Tagged "TodoDestroy" ()) m
+    , Observer (Tagged "TodoStartEdit" ()) m
+    )
+    => Traversal' s Todo
+    -> m ()
+todoView this = bh "div" [("className", strProp "view")] [] $ do
+    todoToggleComplete this
+    todoLabel this
+    todoDestroy
 
 todo :: (AsReactor c, AsJavascript c, AsHTMLElement c)
     => Widget c o Todo (Which '[OnTodoToggleComplete ReactId, OnTodoDestroy ReactId])
-todo = do
+
+todo ::
+    ( HasCallStack
+    , AsReactor c
+    , AsJavascript c
+    , AsHTMLElement c
+    , MonadWidget c s m
+    , Observer (Tagged "TodoToggleComplete" ()) m
+    , Observer (Tagged "TodoDestroy" ()) m
+    )
+    => Traversal' s Todo
+todo this = do
+    k <- askReactId
+    -- prepare to run the children with a locally scoped modified reactid, pushing this name in the list of names
+    modifyReactId $ \(ReactId (ns, _)) -> ReactId (mempty NE.<| ns, 0)
+    -- restore this key
+    putReactId k
+
+
+
+
     k <- mkReactId "input"
     let todoInput' = pickOnly <$> todoInput k
         wid = overWindow2' (*>) todoView todoInput'
@@ -172,7 +195,7 @@ todo = do
         => ReactId -> OnTodoStartEdit ReactId -> Gadget c o Todo ()
     hdlStartEdit k (untag @"OnTodoStartEdit" -> _) = do
         mutate k $ _editing .= True
-        j <- getElementalRef k
+        j <- getReactRef k
         onNextRendered $ do
             focus j
             (`evalMaybeT` ()) $ do

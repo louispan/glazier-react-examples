@@ -2,13 +2,17 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Todo.App where
@@ -16,7 +20,11 @@ module Todo.App where
 import Control.Lens
 import Control.Lens.Misc
 import Control.Monad
+import Data.Functor.Compose
+import Control.Monad.Trans.Except
 import Control.Monad.Trans.Class
+import qualified Data.Aeson as A
+import qualified Data.Aeson.Applicative as A
 import Data.Diverse.Profunctor
 import qualified Data.DList as DL
 import qualified Data.JSString as J
@@ -42,12 +50,13 @@ import qualified Todo.Todo as TD
 todoSorter :: Applicative m => srt -> a -> a -> m Ordering
 todoSorter _ _ _ = pure LT
 
-todoFilterer :: Applicative m => TD.Filter -> TD.Todo -> m Bool
+todoFilterer :: TD.Filter -> Obj TD.Todo -> Benign IO Bool
 todoFilterer ftr td = do
+    td' <- model <$> (benignReadIORef $ sceneRef td)
     pure $ case ftr of
         TD.All -> True
-        TD.Active -> not $ TD.completed $ td
-        TD.Completed -> TD.completed $ td
+        TD.Active -> not $ TD.completed $ td'
+        TD.Completed -> TD.completed $ td'
 
 data App = App
     { newTodo :: J.JSString
@@ -55,6 +64,23 @@ data App = App
     } deriving (G.Generic)
 
 makeLenses_ ''App
+
+instance MonadIO m => A.AToJSON (Benign m) App
+instance (Applicative m, AsJavascript c, AsHTMLElement c, MonadReactor c m) => A.AFromJSON (ExceptT (Which '[TD.OnTodoToggleComplete (ReactId, UKey), TD.OnTodoDestroy (ReactId, UKey), OnTodoMutated (ReactId, UKey)]) m) App where
+    aparseJSON = A.withObject "App" $ \v -> fmap initialize (aparse' v)
+      where
+        aparse' v = getCompose $ (,)
+            <$> (Compose $ A.aparseField v "newTodo")
+            <*> (Compose $ A.aparseField v "todos")
+        initialize m = do
+            (v, xs) <- m
+            xs' <- initialize' xs
+            pure $ App v xs'
+        initialize' :: (AsJavascript c, AsHTMLElement c, MonadReactor c m) => W.DynamicCollection TD.Filter () UKey TD.Todo -> (ExceptT (Which '[TD.OnTodoToggleComplete (ReactId, UKey), TD.OnTodoDestroy (ReactId, UKey), OnTodoMutated (ReactId, UKey)]) m) TD.TodoCollection
+        initialize' W.DynamicCollection {..} = do
+            xs <- M.traverseWithKey (\k -> ExceptT . doInsertTodo k) rawCollection
+            let xs' = W.DynamicCollection filterCriteria sortCriteria [] xs
+            lift $ evalBenignIO $ execStateT (W.updateVisibleList todoFilterer todoSorter) xs'
 
 type OnNewTodo = Tagged "OnNewTodo"
 
@@ -78,7 +104,7 @@ todoInput onNewTodoK k =
         )
         => Gadget c o J.JSString ()
     hdlMounted = onMounted $ do
-        j <- getElementalRef k
+        j <- getReactRef k
         exec $ Focus j
 
     hdlKeyDown :: (AsReactor c) => KeyDownKey -> Gadget c o J.JSString (OnNewTodo (ReactId, J.JSString))
@@ -126,7 +152,7 @@ appToggleCompleteAll k =
     hasActiveTodos = fmap getAny . getAp . foldMap go
       where
         go obj = Ap $ do
-            scn <- benignReadIORef $ modelRef obj
+            scn <- benignReadIORef $ sceneRef obj
             pure $ Any $ scn ^. _model.TD._completed
 
     hdlChange :: (AsReactor c) => Gadget c o TD.TodoCollection ()
@@ -222,16 +248,26 @@ insertTodo :: (AsReactor c, AsJavascript c, AsHTMLElement c)
 insertTodo (untag @"OnNewTodo" -> (k, v)) = do
     s <- getModel
     let mi = view (_todos.W._rawCollection.to lookupMax) s
-        i' = case mi of
-            Just (i, _) -> largerUKey i
+        i = case mi of
+            Just (i', _) -> largerUKey i'
             Nothing -> zeroUKey
-    -- logDebug $ pure "New todo"
-    withMkObj (decorateTodoEvents i' <$> todo') (TD.Todo v False False) $ \obj ->
-        mutate k $ _todos.W._rawCollection.(at i') .= Just obj
+    delegate $ \fire -> do
+        -- logDebug $ pure "New todo"
+        eo <- doInsertTodo i (TD.Todo v False False)
+        case eo of
+            Left a -> fire a
+            Right obj -> mutate k $ _todos.W._rawCollection.(at i) .= Just obj
   where
     lookupMax = listToMaybe . M.toDescList
+
+doInsertTodo :: (AsJavascript c, AsHTMLElement c, MonadReactor c m)
+    => UKey -> TD.Todo -> m
+        (Either (Which '[TD.OnTodoToggleComplete (ReactId, UKey), TD.OnTodoDestroy (ReactId, UKey), OnTodoMutated (ReactId, UKey)]) (Obj TD.Todo))
+doInsertTodo i td = mkObj (decorateTodoEvents i <$> todo') td
+  where
     todo' = TD.todo
         & chooseWith also $ (onMutated $ pure . pickOnly . Tagged @"OnTodoMutated")
+
 
 decorateTodoEvents :: UKey -> Which '[TD.OnTodoToggleComplete ReactId, TD.OnTodoDestroy ReactId, OnTodoMutated ReactId]
     -> Which '[TD.OnTodoToggleComplete (ReactId, UKey), TD.OnTodoDestroy (ReactId, UKey), OnTodoMutated (ReactId, UKey)]
