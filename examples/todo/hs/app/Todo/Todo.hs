@@ -61,8 +61,8 @@ todoToggleComplete ::
     , Observer (Tagged "TodoToggleComplete" ()) m
     )
     => Traversal' s Todo
-    -> m ()
-todoToggleComplete this = (retag' @"InputChange" @"TodoToggleComplete" @()) `reobserve`
+    -> Widget m ()
+todoToggleComplete this = reobserve (retag' @"InputChange" @"TodoToggleComplete" @()) `fmap2`
     W.checkboxInput (this._completed) [("className", strProp "toggle")] []
 
 todoDestroy ::
@@ -71,14 +71,14 @@ todoDestroy ::
     , MonadWidget c s m
     , Observer (Tagged "TodoDestroy" ()) m
     )
-    => m ()
+    => Widget m ()
 todoDestroy =
     lf "button"
         [("key", strProp "destroy")
         ,("className", strProp"destroy")]
         [onClick]
   where
-    onClick = observe =<< trigger_ "onClick" (Tagged @"TodoDestroy" ())
+    onClick = trigger_ "onClick" (Tagged @"TodoDestroy" ()) observe
 
 
 todoLabel ::
@@ -88,10 +88,10 @@ todoLabel ::
     , Observer (Tagged "TodoStartEdit" ()) m
     )
     => Traversal' s Todo
-    -> m ()
+    -> Widget m ()
 todoLabel this = bh "label" [] [onDoubleClick] (rawTxt . view $ this._value)
   where
-    onDoubleClick = observe =<< trigger_ "onDoubleClick" (Tagged @"TodoStartEdit" ())
+    onDoubleClick = trigger_ "onDoubleClick" (Tagged @"TodoStartEdit" ()) observe
 
 todoInput ::
     ( HasCallStack
@@ -103,19 +103,17 @@ todoInput ::
     , Observer (Tagged "TodoDestroy" ()) m
     )
     => Traversal' s Todo
-    -> m ()
+    -> Widget m ()
 todoInput this = W.textInput (this._value)
     [("className", strProp "edit")]
     [hdlBlur, hdlKeyDown]
   where
-    hdlBlur = do
-        trigger_ "onBlur" ()
+    hdlBlur = trigger_ "onBlur" () $ const $
         mutate $ do
             this._editing .= False
             this._value %= J.strip
 
-    hdlKeyDown = do
-        (KeyDownKey _ key) <- trigger "onKeyDown" fireKeyDownKey
+    hdlKeyDown = trigger "onKeyDown" fireKeyDownKey $ \(KeyDownKey _ key) ->
         case key of
             -- NB. Enter and Escape doesn't generate a onChange event
             -- So there is no adverse interation with W.input onChange
@@ -147,59 +145,59 @@ todoView ::
     , Observer (Tagged "TodoStartEdit" ()) m
     )
     => Traversal' s Todo
-    -> m ()
-todoView this = bh "div" [("className", strProp "view")] [] $ do
+    -> Widget m ()
+todoView this = bh "div" [("className", strProp "view")] [] $
     todoToggleComplete this
-    todoLabel this
-    todoDestroy
+    <> todoLabel this
+    <> todoDestroy
 
-todo :: (AsReactor c, AsJavascript c, AsHTMLElement c)
-    => Widget c o Todo (Which '[OnTodoToggleComplete ReactId, OnTodoDestroy ReactId])
+-- todo :: (AsReactor c, AsJavascript c, AsHTMLElement c)
+--     => Widget c o Todo (Which '[OnTodoToggleComplete ReactId, OnTodoDestroy ReactId])
 
-todo ::
-    ( HasCallStack
-    , AsReactor c
-    , AsJavascript c
-    , AsHTMLElement c
-    , MonadWidget c s m
-    , Observer (Tagged "TodoToggleComplete" ()) m
-    , Observer (Tagged "TodoDestroy" ()) m
-    )
-    => Traversal' s Todo
-todo this = do
-    k <- askReactId
-    -- prepare to run the children with a locally scoped modified reactid, pushing this name in the list of names
-    modifyReactId $ \(ReactId (ns, _)) -> ReactId (mempty NE.<| ns, 0)
-    -- restore this key
-    putReactId k
-
-
+-- todo ::
+--     ( HasCallStack
+--     , AsReactor c
+--     , AsJavascript c
+--     , AsHTMLElement c
+--     , MonadWidget c s m
+--     , Observer (Tagged "TodoToggleComplete" ()) m
+--     , Observer (Tagged "TodoDestroy" ()) m
+--     )
+--     => Traversal' s Todo
+-- todo this = do
+--     k <- askReactId
+--     -- prepare to run the children with a locally scoped modified reactid, pushing this name in the list of names
+--     modifyReactId $ \(ReactId (ns, _)) -> ReactId (mempty NE.<| ns, 0)
+--     -- restore this key
+--     putReactId k
 
 
-    k <- mkReactId "input"
-    let todoInput' = pickOnly <$> todoInput k
-        wid = overWindow2' (*>) todoView todoInput'
-    overWindow fw wid >>= (injectedK $ lift . totally . finish . hdlStartEdit k . obvious)
 
-  where
-    fw win = do
-        s <- view _model
-        bh "li"
-            [ ("className", JE.classNames
-                [ ("completed", completed s)
-                , ("editing", editing s)])
-            ]
-            win
 
-    hdlStartEdit :: (AsHTMLElement c, AsJavascript c, AsReactor c)
-        => ReactId -> OnTodoStartEdit ReactId -> Gadget c o Todo ()
-    hdlStartEdit k (untag @"OnTodoStartEdit" -> _) = do
-        mutate k $ _editing .= True
-        j <- getReactRef k
-        onNextRendered $ do
-            focus j
-            (`evalMaybeT` ()) $ do
-                v <- MaybeT $ JE.fromJSR <$> getProperty "value" j
-                let i = J.length v
-                setProperty ("selectionStart", JE.toJSR (0 :: Int)) j
-                setProperty ("selectionEnd", JE.toJSR i) j
+--     k <- mkReactId "input"
+--     let todoInput' = pickOnly <$> todoInput k
+--         wid = overWindow2' (*>) todoView todoInput'
+--     overWindow fw wid >>= (injectedK $ lift . totally . finish . hdlStartEdit k . obvious)
+
+--   where
+--     fw win = do
+--         s <- view _model
+--         bh "li"
+--             [ ("className", JE.classNames
+--                 [ ("completed", completed s)
+--                 , ("editing", editing s)])
+--             ]
+--             win
+
+--     hdlStartEdit :: (AsHTMLElement c, AsJavascript c, AsReactor c)
+--         => ReactId -> OnTodoStartEdit ReactId -> Gadget c o Todo ()
+--     hdlStartEdit k (untag @"OnTodoStartEdit" -> _) = do
+--         mutate k $ _editing .= True
+--         j <- getReactRef k
+--         onNextRendered $ do
+--             focus j
+--             (`evalMaybeT` ()) $ do
+--                 v <- MaybeT $ JE.fromJSR <$> getProperty "value" j
+--                 let i = J.length v
+--                 setProperty ("selectionStart", JE.toJSR (0 :: Int)) j
+--                 setProperty ("selectionEnd", JE.toJSR i) j
