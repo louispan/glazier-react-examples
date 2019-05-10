@@ -15,9 +15,9 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Todo.Footer
+module Todo.TodoCollection
     ( TodoCollection
-    , todoFooter
+    , todoCollection
     ) where
 
 import Control.Lens
@@ -36,7 +36,14 @@ import qualified Todo.Todo as TD
 type TodoCollection = W.DynamicCollection TD.Filter () UKey (Obj TD.Todo)
 
 todoDisplay :: ReactId -> Window TodoCollection ()
-todoDisplay k = do
+todoDisplay ::
+    ( HasCallStack
+    , AsReactor c
+    , MonadWidget c s m
+    )
+    => Traversal' s J.JSString
+    -> Widget m ()
+todoDisplay this = do
     s <- ask
     let xs = s ^. (_model.W._rawCollection.to toList)
         isActive obj = do
@@ -45,6 +52,8 @@ todoDisplay k = do
     (completed, active) <- lift $ LM.partitionM isActive xs
     let completedCount = length @[] completed
         activeCount = length active
+
+
     bh "footer" [("key", reactIdKey' k), ("className", "footer")] $ do
         bh "span" [ ("className", "todo-count")
                     , ("key", "todo-count")] $ do
@@ -87,9 +96,9 @@ todoDisplay k = do
            else alsoZero
 
 -- | The 'JE.JSRep' arg should be @document.defaultView@ or @window@
-todoFooter :: (AsReactor c, AsJavascript c)
+todoCollection :: (AsReactor c, AsJavascript c)
     => JE.JSRep -> ReactId -> Widget c o TodoCollection r
-todoFooter j k =
+todoCollection j k =
     let win = todoDisplay k
         gad = (finish $ hdlHashChange k j)
             `also` (finish $ hdlClearCompleted k)

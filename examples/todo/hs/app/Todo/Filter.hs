@@ -14,9 +14,9 @@ data Filter = All | Active | Completed
     deriving (Eq, Show, Ord, G.Generic)
 
 instance A.ToJSON Filter where toEncoding = A.genericToEncoding A.defaultOptions
-instance A.FromJSON Filter
 instance Applicative m => A.AToJSON m Filter
-instance Applicative m => A.AFromJSON m Filter
+-- instance A.FromJSON Filter
+-- instance Applicative m => A.AFromJSON m Filter
 
 -- instance W.FilterPredicate Filter TD.Todo where
 --     filterPredicate ftr td = do
