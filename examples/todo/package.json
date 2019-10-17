@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "homepage": "https://louispan.github.io/glazier-react-examples",
+  "sideEffects": [
+    "./src/index.js"
+  ],
   "devDependencies": {
     "gh-pages": "^0.12.0",
     "react-scripts": "0.8.5"
@@ -12,7 +15,7 @@
     "react-dom": "^15.4.2",
     "todomvc-app-css": "2.0.0",
     "todomvc-common": "^1.0.1",
-    "javascript-stringify": "file:../../../javascript-stringify"
+    "glazier-react-widgets": "file:../../../javascript-stringify"
   },
   "scripts": {
     "start": "react-scripts start",
