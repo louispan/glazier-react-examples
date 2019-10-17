@@ -11,6 +11,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Todo.Todo where
     -- ( Todo(..)
@@ -65,13 +66,14 @@ todoDestroy = lf' (jsstr "button") [("onClick", onClick)]
     onClick = mkSyntheticHandler (const $ pure ()) $
         const $ observe $ Tagged @"TodoDestroy" ()
 
-todoLabel :: (MonadWidget s c m, MonadObserver (Tagged "TodoStartEdit" ()) m)
+todoLabel :: (MonadWidget s c m, MonadObserver (Tagged "TodoStartEdit" DOM.HTMLElement) m)
     => Traversal' s Todo -> m ()
 todoLabel this = bh' (jsstr "label") [("onDoubleClick", onDoubleClick)] []
     (strTxt (view $ this._value))
   where
-    onDoubleClick = mkSyntheticHandler (const $ pure ()) $
-        const $ observe $ Tagged @"TodoStartEdit" ()
+    fromDoubleClick = maybeM . pure . viaJS @DOM.HTMLElement . DOM.target
+    onDoubleClick = mkSyntheticHandler fromDoubleClick $ \t ->
+        observe $ Tagged @"TodoStartEdit" t
 
 todoInput ::
     ( MonadWidget s c m
@@ -92,8 +94,8 @@ todoInput this = input (Tagged @"InputChange" ()) (this._value)
     onKeyDown = mkSyntheticHandler fromKeyDown hdlKeyDown
     fromKeyDown evt = maybeM $ pure $ (\t' e' -> (t', DOM.key e')) <$> t <*> e
       where
-        e = fromJS' @DOM.SyntheticKeyboardEvent evt
-        t = fromJS' @DOM.HTMLElement $ DOM.target evt
+        e = viaJS @DOM.SyntheticKeyboardEvent evt
+        t = viaJS @DOM.HTMLElement $ DOM.target evt
     hdlKeyDown (t, k) = case k of
             -- NB. Enter and Escape doesn't generate a onChange event
             -- So there is no adverse interation with input onChange
@@ -113,49 +115,42 @@ todoInput this = input (Tagged @"InputChange" ()) (this._value)
 
             _ -> pure ()
 
+todoView ::
+    ( MonadWidget s c m
+    , MonadObserver (Tagged "TodoToggleComplete" ()) m
+    , MonadObserver (Tagged "TodoDestroy" ()) m
+    , MonadObserver (Tagged "TodoStartEdit" DOM.HTMLElement) m
+    )
+    => Traversal' s Todo
+    -> m ()
+todoView this = do
+    bh' (jsstr "div") [] [("className", strProp' "view")] $ todoToggleComplete this
+    todoLabel this
+    todoDestroy
 
--- todoView ::
---     ( HasCallStack
---     , AsReactor c
---     , MonadWidget c s m
---     , Observer (Tagged "TodoToggleComplete" ()) m
---     , Observer (Tagged "TodoDestroy" ()) m
---     , Observer (Tagged "TodoStartEdit" ()) m
---     )
---     => Traversal' s Todo
---     -> Widget m ()
--- todoView this = bh "div" [] [("className", strProp "view")] $
---     todoToggleComplete this
---     <> todoLabel this
---     <> todoDestroy
-
--- todo ::
---     ( HasCallStack
---     , AsReactor c
---     , AsJavascript c
---     , AsHTMLElement c
---     , MonadWidget c s m
---     , Observer (Tagged "TodoToggleComplete" ()) m
---     , Observer (Tagged "TodoDestroy" ()) m
---     , Observer (Tagged "InputChange" ()) m
---     )
---     => Traversal' s Todo
---     -> Widget m ()
--- todo this = bh "li" [] [("className", classNames
---                         [("completed", maybeM $ preview (this._completed))
---                         ,("editing", maybeM $ preview (this._editing))])]
---                 (todoView' <> todoInput this)
---   where
---     todoView' = (`runObserver` hdlStartEdit) `fmap2` todoView this
---     -- hdlStartEdit :: Tagged "TodoStartEdit" () -> m ()
---     hdlStartEdit (untag @"TodoStartEdit" -> ()) = do
---         mutate $ this._editing .= True
---         j <- getReactRef
---         onRenderedOnce $ do
---             focus j
---             v <- fromProperty "value" j
---             let i = J.length v
---             setProperty ("selectionStart", (0 :: Int)) j
---             setProperty ("selectionEnd", i) j
+todo ::
+    ( MonadWidget s c m
+    , MonadObserver (Tagged "TodoToggleComplete" ()) m
+    , MonadObserver (Tagged "TodoDestroy" ()) m
+    , MonadObserver (Tagged "InputChange" ()) m
+    )
+    => Traversal' s Todo
+    -> m ()
+todo this = bh (jsstr "li") []
+    [("className", classNames
+        [("completed", preview $ this._completed)
+        ,("editing", preview $ this._editing)])]
+    $ do
+        todoView'
+        todoInput this
+  where
+    todoView' = (`runObserverT` hdlStartEdit) $ todoView this
+    -- hdlStartEdit :: Tagged "TodoStartEdit" () -> m ()
+    hdlStartEdit (untag' @"TodoStartEdit" @DOM.HTMLElement -> t) = do
+        mutate' $ this._editing .= True
+        DOM.focus t
+        v <- maybeM $ fromJS @JSString <$> getProperty t "value"
+        setProperty t ("selectionStart", toJS @Int 0)
+        setProperty t ("selectionEnd", toJS $ J.length v)
 
 
