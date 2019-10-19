@@ -63,31 +63,31 @@ makeLenses_ ''Todo
 -- data TodoStartEdit = TodoStartEdit
 
 todoToggleComplete ::
-    (MonadWidget s c m, MonadObserver (Tagged "TodoToggleComplete" ()) m)
+    (MonadWidget s m, MonadObserver' (Tagged "TodoToggleComplete" ()) m)
     => Traversal' s Todo -> m ()
 todoToggleComplete this = checkbox (Tagged @"TodoToggleComplete" ()) (this._completed)
     [] [("className", strProp "toggle")]
 
-todoDestroy :: (MonadWidget s c m, MonadObserver (Tagged "TodoDestroy" ()) m) => m ()
+todoDestroy :: (MonadWidget s m, MonadObserver' (Tagged "TodoDestroy" ()) m) => m ()
 todoDestroy = lf "button" [("onClick", onClick)]
     [("key", strProp "destroy"),("className", strProp "destroy")]
   where
     onClick = mkSyntheticHandler (const $ pure ()) $
-        const $ observe $ Tagged @"TodoDestroy" ()
+        const $ observe' $ Tagged @"TodoDestroy" ()
 
-todoLabel :: (MonadWidget s c m, MonadObserver (Tagged "TodoStartEdit" DOM.HTMLElement) m)
+todoLabel :: (MonadWidget s m, MonadObserver' (Tagged "TodoStartEdit" DOM.HTMLElement) m)
     => Traversal' s Todo -> m ()
-todoLabel this = bh' (jsstr "label") [("onDoubleClick", onDoubleClick)] []
+todoLabel this = bh (jsstr "label") [("onDoubleClick", onDoubleClick)] []
     (strTxt (view $ this._value))
   where
     fromDoubleClick = maybeM . pure . viaJS @DOM.HTMLElement . DOM.target
     onDoubleClick = mkSyntheticHandler fromDoubleClick $ \t ->
-        observe $ Tagged @"TodoStartEdit" t
+        observe' $ Tagged @"TodoStartEdit" t
 
 todoInput ::
-    ( MonadWidget s c m
-    , MonadObserver (Tagged "InputChange" ()) m
-    , MonadObserver (Tagged "TodoDestroy" ()) m
+    ( MonadWidget s m
+    , MonadObserver' (Tagged "InputChange" ()) m
+    , MonadObserver' (Tagged "TodoDestroy" ()) m
     )
     => Traversal' s Todo
     -> m ()
@@ -120,30 +120,30 @@ todoInput this = input (Tagged @"InputChange" ()) (this._value)
                                 this._editing .= NotEditing
                                 this._value .= v'
                                 pure Nothing
-                    observe a
+                    observe' a
 
             "Escape" -> DOM.blur t -- The onBlur handler will trim the value
 
             _ -> pure ()
 
 todoView ::
-    ( MonadWidget s c m
-    , MonadObserver (Tagged "TodoToggleComplete" ()) m
-    , MonadObserver (Tagged "TodoDestroy" ()) m
-    , MonadObserver (Tagged "TodoStartEdit" DOM.HTMLElement) m
+    ( MonadWidget s m
+    , MonadObserver' (Tagged "TodoToggleComplete" ()) m
+    , MonadObserver' (Tagged "TodoDestroy" ()) m
+    , MonadObserver' (Tagged "TodoStartEdit" DOM.HTMLElement) m
     )
     => Traversal' s Todo
     -> m ()
 todoView this = do
-    bh' "div" [] [("className", strProp' "view")] $ todoToggleComplete this
+    bh "div" [] [("className", strProp "view")] $ todoToggleComplete this
     todoLabel this
     todoDestroy
 
 todo ::
-    forall c s m. ( MonadWidget s c m
-    , MonadObserver (Tagged "TodoToggleComplete" ()) m
-    , MonadObserver (Tagged "TodoDestroy" ()) m
-    , MonadObserver (Tagged "InputChange" ()) m
+    ( MonadWidget s m
+    , MonadObserver' (Tagged "TodoToggleComplete" ()) m
+    , MonadObserver' (Tagged "TodoDestroy" ()) m
+    , MonadObserver' (Tagged "InputChange" ()) m
     )
     => Traversal' s Todo
     -> m ()
