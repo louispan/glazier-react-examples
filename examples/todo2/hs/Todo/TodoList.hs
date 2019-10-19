@@ -1,88 +1,79 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveAnyClass #-}
+{-# OPTIONS_GHC -Wno-type-defaults #-}
+
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ExtendedDefaultRules #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeFamilies #-}
 
 module Todo.TodoList where
 
-import Control.Concurrent.MVar
--- import Control.Lens
--- import qualified Control.Monad.ListM as LM
--- import Data.Foldable
--- import qualified Data.JSString as J
+import qualified Control.Monad.ListM as LM
+import qualified GHC.Generics as G
 import Glazier.React
-import qualified Todo.Todo as TD
+import Todo.Todo
 
 default (JSString)
 
 data Filter = All | Active | Completed
     deriving (Eq, Show, Ord, G.Generic)
 
+data TodoList = TodoList
+    { filterCriteria :: Filter
+    , todos :: [Obj Todo]
+    } deriving (G.Generic)
+
+makeLenses_ ''TodoList
+
 -- type TodoCollection = W.DynamicCollection TD.Filter () UKey (Obj TD.Todo)
 
 footer ::
-    MonadWidget s c m
-    => Traversal' s J.JSString
+    MonadWidget s m
+    => Traversal' s TodoList
     -> m ()
 footer this = do
-    xs <- askModel
-    let isActive obj = TD.completed <$> liftIO $ readMVar $ modelVar obj
-    (completed, active) <- lift $ LM.partitionM isActive xs
-    let completedCount = length completed
-        activeCount = length active
+    xs <- maybeM $ (preview $ this._todos) <$> askModel
+    let isCompleted obj = completed <$> readObj obj
+    (completes, actives) <- LM.partitionM isCompleted xs
+    let completedCount = length @[] completes -- LM.partitionM requires inferring
+        activeCount = length actives
 
-    bh' "footer" [("className", strProp' "footer")] $ do
-        bh' "span" [ ("className", "todo-count")
-                    , ("key", "todo-count")] $ do
-            bh "strong" [("key", "items")] (txt $ J.pack $ show activeCount)
+    bh "footer" [] [("className", "footer")] $ do
+        bh "span" [] [("className", "todo-count"), ("key", "todo-count")] $ do
+            bh "strong" [] [("key", "items")] $
+                txt $ const $ fromString $ show activeCount
             txt " items left"
-        bh "ul" [("className", "filters")
-                  , ("key", "filters")] $ do
-            bh "li" [("key", "filter-all")] $
-                bh "a" [ ("href", "#/")
-                         , ("key", "all")
-                         , ("className", JE.classNames
-                            [("selected"
-                            , s ^. _meta.W._filterCriteria == TD.All)])
-                         ] $
+        bh "ul" [] [("className", "filters"), ("key", "filters")] $ do
+            bh "li" [] [("key", "filter-all")] $
+                bh "a" [] [ ("href", "#/")
+                        , ("key", "all")
+                        , ("className", classNames
+                            [("selected", preview $ this._filterCriteria.to (== All))])
+                        ] $
                 txt "All"
             txt " "
-            bh "li" [("key", "filter-active")] $
-                bh "a"
-                [ ("href", "#/active")
-                , ("key", "active")
-                , ("className", JE.classNames
-                    [("selected"
-                    , s ^. _meta.W._filterCriteria == TD.Active)])
-                ] $
-                txt "Active"
+            bh "li" [] [("key", "filter-active")] $
+                bh "a" [] [ ("href", "#/active")
+                        , ("key", "active")
+                        , ("className", classNames
+                            [("selected", preview $ this._filterCriteria.to (== Active))])
+                        ] $
+                    txt "Active"
             txt " "
-            bh "li" [("key", "filter-completed")] $
-                bh "a"
-                    [ ("href", "#/completed")
-                    , ("key", "completed")
-                    , ("className", JE.classNames
-                        [("selected"
-                        , s ^. _meta.W._filterCriteria == TD.Completed)])
-                    ] $
+            bh "li" [] [("key", "filter-completed")] $
+                bh "a" [] [ ("href", "#/completed")
+                        , ("key", "completed")
+                        , ("className", classNames
+                            [("selected", preview $ this._filterCriteria.to (== Completed))])
+                        ] $
                     txt "Completed"
         if (completedCount > 0)
-           then bh' k "button"
-                    [("key", "clear-completed"), ("className", "clear-completed")] $
+           then bh "button" []
+                        [("key", "clear-completed"), ("className", "clear-completed")] $
                     txt "Clear completed"
-           else alsoZero
+           else pure ()
 
 -- -- | The 'JE.JSRep' arg should be @document.defaultView@ or @window@
 -- todoCollection :: (AsReactor c, AsJavascript c)

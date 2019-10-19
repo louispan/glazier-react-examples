@@ -4,17 +4,11 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ExtendedDefaultRules #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Todo.Todo where
@@ -30,7 +24,6 @@ module Todo.Todo where
 -- import qualified Data.Aeson as A
 -- import qualified Data.Aeson.Applicative as A
 
--- import qualified Data.DList as DL
 import qualified Data.JSString as J
 import qualified GHC.Generics as G
 import qualified Glazier.DOM as DOM
@@ -66,19 +59,19 @@ todoToggleComplete ::
     (MonadWidget s m, MonadObserver' (Tagged "TodoToggleComplete" ()) m)
     => Traversal' s Todo -> m ()
 todoToggleComplete this = checkbox (Tagged @"TodoToggleComplete" ()) (this._completed)
-    [] [("className", strProp "toggle")]
+    [] [("className", "toggle")]
 
 todoDestroy :: (MonadWidget s m, MonadObserver' (Tagged "TodoDestroy" ()) m) => m ()
 todoDestroy = lf "button" [("onClick", onClick)]
-    [("key", strProp "destroy"),("className", strProp "destroy")]
+    [("key", "destroy"),("className", "destroy")]
   where
     onClick = mkSyntheticHandler (const $ pure ()) $
         const $ observe' $ Tagged @"TodoDestroy" ()
 
 todoLabel :: (MonadWidget s m, MonadObserver' (Tagged "TodoStartEdit" DOM.HTMLElement) m)
     => Traversal' s Todo -> m ()
-todoLabel this = bh (jsstr "label") [("onDoubleClick", onDoubleClick)] []
-    (strTxt (view $ this._value))
+todoLabel this = bh "label" [("onDoubleClick", onDoubleClick)] []
+    (txt (view $ this._value))
   where
     fromDoubleClick = maybeM . pure . viaJS @DOM.HTMLElement . DOM.target
     onDoubleClick = mkSyntheticHandler fromDoubleClick $ \t ->
@@ -93,7 +86,7 @@ todoInput ::
     -> m ()
 todoInput this = input (Tagged @"InputChange" ()) (this._value)
     [("onBlur", onBlur), ("onKeyDown", onKeyDown)]
-    [("className", strProp "edit")]
+    [("className", "edit")]
   where
     onBlur = mkSyntheticHandler (const $ pure ()) (const $
         mutate' $ do
@@ -135,7 +128,7 @@ todoView ::
     => Traversal' s Todo
     -> m ()
 todoView this = do
-    bh "div" [] [("className", strProp "view")] $ todoToggleComplete this
+    bh "div" [] [("className", "view")] $ todoToggleComplete this
     todoLabel this
     todoDestroy
 
