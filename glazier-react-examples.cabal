@@ -21,7 +21,7 @@ executable todo
                       --  Todo.App
                        Todo.Todo
   --                      Todo.Filter
-  --                      Todo.TodoCollection
+                       -- Todo.TodoList
   main-is:             Main.hs
   ghc-options:         -Wall -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   cpp-options:         -DGHCJS_BROWSER

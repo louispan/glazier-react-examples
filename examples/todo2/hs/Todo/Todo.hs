@@ -1,5 +1,8 @@
+{-# OPTIONS_GHC -Wno-type-defaults #-}
+
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE ExtendedDefaultRules #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -8,6 +11,7 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -33,11 +37,16 @@ import qualified Glazier.DOM as DOM
 import Glazier.React
 import Glazier.React.Widgets.Input
 
+default (JSString)
+
+data Editing = NotEditing | Editing | Focusing DOM.HTMLElement
+    deriving (Show, G.Generic)
+
 data Todo = Todo
     { value :: JSString
     , completed :: Bool
-    , editing :: Bool
-    } deriving (Show, Eq, Ord, G.Generic)
+    , editing :: Editing
+    } deriving (Show, G.Generic)
 
 makeLenses_ ''Todo
 
@@ -59,9 +68,9 @@ todoToggleComplete ::
 todoToggleComplete this = checkbox (Tagged @"TodoToggleComplete" ()) (this._completed)
     [] [("className", strProp "toggle")]
 
-todoDestroy :: (MonadWidget' c m, MonadObserver (Tagged "TodoDestroy" ()) m) => m ()
-todoDestroy = lf' (jsstr "button") [("onClick", onClick)]
-    [("key", strProp' "destroy"),("className", strProp' "destroy")]
+todoDestroy :: (MonadWidget s c m, MonadObserver (Tagged "TodoDestroy" ()) m) => m ()
+todoDestroy = lf "button" [("onClick", onClick)]
+    [("key", strProp "destroy"),("className", strProp "destroy")]
   where
     onClick = mkSyntheticHandler (const $ pure ()) $
         const $ observe $ Tagged @"TodoDestroy" ()
@@ -88,7 +97,7 @@ todoInput this = input (Tagged @"InputChange" ()) (this._value)
   where
     onBlur = mkSyntheticHandler (const $ pure ()) (const $
         mutate' $ do
-            this._editing .= False
+            this._editing .= NotEditing
             this._value %= J.strip)
 
     onKeyDown = mkSyntheticHandler fromKeyDown hdlKeyDown
@@ -100,16 +109,18 @@ todoInput this = input (Tagged @"InputChange" ()) (this._value)
             -- NB. Enter and Escape doesn't generate a onChange event
             -- So there is no adverse interation with input onChange
             -- updating the value under our feet.
-            "Enter" -> mutateThen' $ do
-                v <- use (this._value)
-                let v' = J.strip v
-                if J.null v'
-                    then
-                        pure $ observe $ Tagged @"TodoDestroy" ()
-                    else do
-                        this._editing .= False
-                        this._value .= v'
-                        pure $ pure ()
+            "Enter" -> do
+                    a <- maybeM $ mutate' $ do
+                        v <- use (this._value)
+                        let v' = J.strip v
+                        if J.null v'
+                            then
+                                pure $ Just $ Tagged @"TodoDestroy" ()
+                            else do
+                                this._editing .= NotEditing
+                                this._value .= v'
+                                pure Nothing
+                    observe a
 
             "Escape" -> DOM.blur t -- The onBlur handler will trim the value
 
@@ -124,33 +135,49 @@ todoView ::
     => Traversal' s Todo
     -> m ()
 todoView this = do
-    bh' (jsstr "div") [] [("className", strProp' "view")] $ todoToggleComplete this
+    bh' "div" [] [("className", strProp' "view")] $ todoToggleComplete this
     todoLabel this
     todoDestroy
 
 todo ::
-    ( MonadWidget s c m
+    forall c s m. ( MonadWidget s c m
     , MonadObserver (Tagged "TodoToggleComplete" ()) m
     , MonadObserver (Tagged "TodoDestroy" ()) m
     , MonadObserver (Tagged "InputChange" ()) m
     )
     => Traversal' s Todo
     -> m ()
-todo this = bh (jsstr "li") []
-    [("className", classNames
-        [("completed", preview $ this._completed)
-        ,("editing", preview $ this._editing)])]
-    $ do
-        todoView'
-        todoInput this
+todo this = do
+    initRendered onRendered
+    bh "li" []
+        [("className", classNames
+            [("completed", preview $ this._completed)
+            ,("editing", preview $ this._editing.to isEditing)])]
+        $ do
+            todoView'
+            todoInput this
   where
+    isEditing NotEditing = False
+    isEditing _ = True
+
     todoView' = (`runObserverT` hdlStartEdit) $ todoView this
+
     -- hdlStartEdit :: Tagged "TodoStartEdit" () -> m ()
-    hdlStartEdit (untag' @"TodoStartEdit" @DOM.HTMLElement -> t) = do
-        mutate' $ this._editing .= True
-        DOM.focus t
-        v <- maybeM $ fromJS @JSString <$> getProperty t "value"
-        setProperty t ("selectionStart", toJS @Int 0)
-        setProperty t ("selectionEnd", toJS $ J.length v)
+    hdlStartEdit (untag' @"TodoStartEdit" @DOM.HTMLElement -> t) =
+        -- this will change the CSS style to make the label editable
+        mutate' $ this._editing .= Focusing t
+
+    onRendered = do
+        s <- askModel
+        e <- maybeM $ pure $ preview (this._editing) s
+        case e of
+            Focusing t -> do
+                mutate RerenderNotRequired $ this._editing .= Editing
+                -- we can only focus after the label become visible after CSS rerender
+                DOM.focus t
+                v <- maybeM $ fromJS @JSString <$> getProperty t "value"
+                setProperty t ("selectionStart", toJS @Int 0)
+                setProperty t ("selectionEnd", toJS $ J.length v)
+            _ -> pure ()
 
 
