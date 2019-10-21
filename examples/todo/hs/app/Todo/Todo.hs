@@ -161,8 +161,8 @@ todo ::
     => Traversal' s Todo
     -> Widget m ()
 todo this = bh "li" [] [("className", classNames
-                        [("completed", maybeM $ preview (this._completed))
-                        ,("editing", maybeM $ preview (this._editing))])]
+                        [("completed", fromJustM $ preview (this._completed))
+                        ,("editing", fromJustM $ preview (this._editing))])]
                 (todoView' <> todoInput this)
   where
     todoView' = (`runObserver` hdlStartEdit) `fmap2` todoView this

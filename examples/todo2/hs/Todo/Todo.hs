@@ -65,7 +65,7 @@ todoDestroy :: (MonadWidget s m, MonadObserver' (Tagged "TodoDestroy" ()) m) => 
 todoDestroy = lf "button" [("onClick", onClick)]
     [("key", "destroy"),("className", "destroy")]
   where
-    onClick = mkSyntheticHandler (const $ pure ()) $
+    onClick = mkHandler' (const $ pure ()) $
         const $ observe' $ Tagged @"TodoDestroy" ()
 
 todoLabel :: (MonadWidget s m, MonadObserver' (Tagged "TodoStartEdit" DOM.HTMLElement) m)
@@ -73,8 +73,8 @@ todoLabel :: (MonadWidget s m, MonadObserver' (Tagged "TodoStartEdit" DOM.HTMLEl
 todoLabel this = bh "label" [("onDoubleClick", onDoubleClick)] []
     (txt (view $ this._value))
   where
-    fromDoubleClick = maybeM . pure . viaJS @DOM.HTMLElement . DOM.target
-    onDoubleClick = mkSyntheticHandler fromDoubleClick $ \t ->
+    fromDoubleClick = fromJustM . pure . viaJS @DOM.HTMLElement . DOM.target
+    onDoubleClick = mkHandler' fromDoubleClick $ \t ->
         observe' $ Tagged @"TodoStartEdit" t
 
 todoInput ::
@@ -88,13 +88,13 @@ todoInput this = input (Tagged @"InputChange" ()) (this._value)
     [("onBlur", onBlur), ("onKeyDown", onKeyDown)]
     [("className", "edit")]
   where
-    onBlur = mkSyntheticHandler (const $ pure ()) (const $
+    onBlur = mkHandler' (const $ pure ()) (const $
         mutate' $ do
             this._editing .= NotEditing
             this._value %= J.strip)
 
-    onKeyDown = mkSyntheticHandler fromKeyDown hdlKeyDown
-    fromKeyDown evt = maybeM $ pure $ (\t' e' -> (t', DOM.key e')) <$> t <*> e
+    onKeyDown = mkHandler' fromKeyDown hdlKeyDown
+    fromKeyDown evt = fromJustM $ pure $ (\t' e' -> (t', DOM.key e')) <$> t <*> e
       where
         e = viaJS @DOM.SyntheticKeyboardEvent evt
         t = viaJS @DOM.HTMLElement $ DOM.target evt
@@ -103,7 +103,7 @@ todoInput this = input (Tagged @"InputChange" ()) (this._value)
             -- So there is no adverse interation with input onChange
             -- updating the value under our feet.
             "Enter" -> do
-                    a <- maybeM $ mutate' $ do
+                    a <- fromJustM $ mutate' $ do
                         v <- use (this._value)
                         let v' = J.strip v
                         if J.null v'
@@ -162,13 +162,13 @@ todo this = do
 
     onRendered = do
         s <- askModel
-        e <- maybeM $ pure $ preview (this._editing) s
+        e <- fromJustM $ pure $ preview (this._editing) s
         case e of
             Focusing t -> do
                 mutate RerenderNotRequired $ this._editing .= Editing
                 -- we can only focus after the label become visible after CSS rerender
                 DOM.focus t
-                v <- maybeM $ fromJS @JSString <$> getProperty t "value"
+                v <- fromJustM $ fromJS @JSString <$> getProperty t "value"
                 setProperty t ("selectionStart", toJS @Int 0)
                 setProperty t ("selectionEnd", toJS $ J.length v)
             _ -> pure ()
