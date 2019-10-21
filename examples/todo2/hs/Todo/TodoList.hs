@@ -10,7 +10,7 @@
 
 module Todo.TodoList where
 
-import qualified Control.Monad.ListM as LM
+import Control.Monad.Extra
 import Data.Foldable
 import qualified Data.JSString as J
 import qualified GHC.Generics as G
@@ -37,8 +37,8 @@ footer this = do
         listenEventTarget w "hashchange" fromHashChange hdlHashChange
 
     xs <- fromJustM $ (preview $ this._todos) <$> askModel
-    (completes, actives) <- LM.partitionM isCompleted xs
-    let completedCount = length @[] completes -- LM.partitionM requires inferring
+    (completes, actives) <- partitionM isCompleted xs
+    let completedCount = length completes
         activeCount = length actives
 
     bh "footer" [] [("className", "footer")] $ do
@@ -88,18 +88,18 @@ footer this = do
             _ -> All
     onClearCompletedClicked = mkHandler' (const $ pure ()) $ const $ do
         xs <- fromJustM $ (preview $ this._todos) <$> askModel
-        actives <- LM.filterMP (fmap not. isCompleted) xs
+        actives <- filterM (fmap not. isCompleted) xs
         mutate' $ this._todos .= actives
 
 todoList :: MonadWidget s m => Traversal' s TodoList -> m ()
 todoList this = do
     xs <- fromJustM $ (preview $ this._todos) <$> askModel
     ftr <- fromJustM $ (preview $ this._filterCriteria) <$> askModel
-    ys <- LM.filterMP (isVisible ftr) xs
-    traverse_ displayTodo (ys :: [Obj Todo])
+    ys <- filterM (isVisible ftr) xs
+    traverse_ displayTodo ys
   where
     isVisible ftr obj = do
-        completed' <- completed <$> (readObj obj)
+        completed' <- completed <$> readObj obj
         case (ftr, completed') of
             (All, _) -> pure True
             (Active, False) -> pure True

@@ -18,9 +18,8 @@ executable todo
   default-extensions:  ApplicativeDo
   hs-source-dirs:      examples/todo2/hs
   other-modules:
-                      --  Todo.App
+                       -- Todo.App
                        Todo.Todo
-  --                      Todo.Filter
                        Todo.TodoList
   main-is:             Main.hs
   ghc-options:         -Wall -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
@@ -35,6 +34,7 @@ executable todo
                      -- , data-diverse-lens >= 4.3
                      -- , deepseq >= 1.4
                      -- , dlist >= 0.8
+                     , extra >= 1.6
                      , ghcjs-base-stub >= 0.3.0.2
                      -- , glazier >= 2
                      , glazier-react >= 2
@@ -42,7 +42,6 @@ executable todo
                      , javascript-extras >= 0.6
                      , lens >= 4
                      , lens-misc >= 0
-                     , monadlist >= 0
                      , mtl >= 2
                      , reducers >= 3.12
                      , tagged >= 0.8
