@@ -82,14 +82,14 @@ footer this = do
         let (_, newHash) = J.breakOn "#" newURL
         pure newHash
     hdlHashChange newHash = do
-        mutate' $ this._filterCriteria .= case newHash of
+        noisyMutate $ this._filterCriteria .= case newHash of
             "#/active" -> Active
             "#/completed" -> Completed
             _ -> All
     onClearCompletedClicked = mkHandler' (const $ pure ()) $ const $ do
         xs <- fromJustM $ (preview $ this._todos) <$> askModel
         actives <- filterM (fmap not. isCompleted) xs
-        mutate' $ this._todos .= actives
+        noisyMutate $ this._todos .= actives
 
 todoList :: MonadWidget s m => Traversal' s TodoList -> m ()
 todoList this = do

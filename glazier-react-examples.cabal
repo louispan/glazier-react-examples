@@ -18,7 +18,7 @@ executable todo
   default-extensions:  ApplicativeDo
   hs-source-dirs:      examples/todo2/hs
   other-modules:
-                       -- Todo.App
+                       Todo.App
                        Todo.Todo
                        Todo.TodoList
   main-is:             Main.hs
@@ -43,9 +43,9 @@ executable todo
                      , lens >= 4
                      , lens-misc >= 0
                      , mtl >= 2
-                     , reducers >= 3.12
+                     -- , reducers >= 3.12
                      , tagged >= 0.8
-                     , text >= 1.2
+                     -- , text >= 1.2
                      , transformers >= 0.4
                      , unliftio >= 0.2
                      , unliftio-core >= 0.1

@@ -9,7 +9,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ViewPatterns #-}
 
 module Todo.App where
 
@@ -37,7 +36,7 @@ default (JSString)
 
 data App = App
     { newTodo :: J.JSString
-    , todos :: TD.TodoCollection
+    , todos :: TodoList
     } deriving (G.Generic)
 
 makeLenses_ ''App
@@ -61,19 +60,42 @@ makeLenses_ ''App
 
 -- type OnNewTodo = Tagged "OnNewTodo"
 
--- -- | Use a different ReactId when firing OnNewTodo so that it is easier
--- -- to differentiate between onChanged typing events and new todo event.
--- todoInput :: (AsReactor c, AsJavascript c, AsHTMLElement c)
---     => ReactId -> ReactId -> Widget c o J.JSString (OnNewTodo (ReactId, J.JSString))
--- todoInput onNewTodoK k =
---     let wid = finish . void . overWindow fw $ W.textInput k
---     in wid `also` lift gad
---   where
---     fw = (modifyMarkup (overSurfaceProperties
---         (<> [("className", "new-todo"), ("placeholder", "What needs to be done?")])))
---     gad = (finish hdlMounted)
---         `also` (trigger k "onKeyDown" fireKeyDownKey
---             >>= hdlKeyDown)
+todoInput :: (MonadWidget s m, MonadObserver' (Tagged "OnNewTodo" JSString) m)
+    => ReactId -> Traversal' s App -> m ()
+todoInput scratchId this = input (this._newTodo)
+    [("onKeyDown", onKeyDown), ("ref", onRef)]
+    [("className", "new-todo"), ("placeholder", "What needs to be done?")]
+  where
+    onKeyDown = mkHandler' fromKeyDown (observe' . Tagged @"OnNewTodo")
+    -- Manipulate the DOM input directly to avoid race conditions with lazy GHCJS
+    fromKeyDown :: DOM.SyntheticEvent -> MaybeT IO JSString
+    fromKeyDown evt = case DOM.key <$> e of
+        Just "Enter" -> do
+            v <- fromJustIO $ fromJS <$> getProperty t "value"
+            setProperty t "value" ""
+            let v' = J.strip v
+            if J.null v'
+                then empty
+                else pure v'
+        Just "Escape" -> do
+            setProperty t "value" ""
+            empty
+        _ -> empty
+      where
+        t = DOM.target evt
+        e = viaJS @DOM.SyntheticKeyboardEvent evt
+
+    onRef = mkHandler pure hdlRef
+
+    hdlRef j = do
+        d <- fromJS @Bool <$> getScratch scratchId "newTodoFocused"
+        case d of
+            Just True -> pure ()
+            _ -> do
+                setScratch scratchId "newTodoFocused" True
+                j' <- fromJustM $ pure $ viaJS @DOM.HTMLElement j
+                DOM.focus j'
+
 
 --     hdlMounted ::
 --         ( AsReactor c
@@ -83,28 +105,6 @@ makeLenses_ ''App
 --     hdlMounted = onMounted $ do
 --         j <- getReactRef k
 --         exec $ Focus j
-
---     hdlKeyDown :: (AsReactor c) => KeyDownKey -> Gadget c o J.JSString (OnNewTodo (ReactId, J.JSString))
---     hdlKeyDown (KeyDownKey _ key) =
---         case key of
---             -- NB. Enter and Escape doesn't generate a onChange event
---             -- So there is no adverse interation with W.input onChange
---             -- updating the value under our feet.
---             "Enter" -> mutateThen k $ do
---                 v <- get
---                 let v' = J.strip v
---                 id .= J.empty
---                 pure $ if J.null v'
---                     then do
---                         debugIO_ $ putStrLn "empty todo"
---                         finish $ pure ()
---                     else do
---                         debugIO_ $ putStrLn "new todo entered"
---                         pure $ Tagged @"OnNewTodo" (onNewTodoK, v')
-
---             "Escape" -> finish $ mutate k $ id .= J.empty
-
---             _ -> finish $ pure ()
 
 -- appToggleCompleteAll :: (AsReactor c)
 --     => ReactId -> Widget c o TD.TodoCollection r

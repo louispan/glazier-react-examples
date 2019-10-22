@@ -32,13 +32,13 @@ import Glazier.React.Widgets.Input
 
 default (JSString)
 
-data Editing = NotEditing | Editing | Focusing DOM.HTMLElement
-    deriving (Show, G.Generic)
+-- data Editing = NotEditing | Editing | Focusing DOM.HTMLElement
+--     deriving (Show, G.Generic)
 
 data Todo = Todo
     { value :: JSString
     , completed :: Bool
-    , editing :: Editing
+    , editing :: Bool
     } deriving (Show, G.Generic)
 
 makeLenses_ ''Todo
@@ -58,8 +58,10 @@ makeLenses_ ''Todo
 todoToggleComplete ::
     (MonadWidget s m, MonadObserver' (Tagged "TodoToggleComplete" ()) m)
     => Traversal' s Todo -> m ()
-todoToggleComplete this = checkbox (Tagged @"TodoToggleComplete" ()) (this._completed)
-    [] [("className", "toggle")]
+todoToggleComplete this = checkbox (this._completed)
+    [("onChange", onChange)] [("className", "toggle")]
+  where
+    onChange = mkHandler' (const $ pure ()) (const $ observe' $ Tagged @"TodoToggleComplete" ())
 
 todoDestroy :: (MonadWidget s m, MonadObserver' (Tagged "TodoDestroy" ()) m) => m ()
 todoDestroy = lf "button" [("onClick", onClick)]
@@ -84,13 +86,14 @@ todoInput ::
     )
     => Traversal' s Todo
     -> m ()
-todoInput this = input (Tagged @"InputChange" ()) (this._value)
-    [("onBlur", onBlur), ("onKeyDown", onKeyDown)]
+todoInput this = input (this._value)
+    [("onBlur", onBlur), ("onKeyDown", onKeyDown), ("onChange", onChange)]
     [("className", "edit")]
   where
+    onChange = mkHandler' (const $ pure ()) (const $ observe' $ Tagged @"InputChange" ())
     onBlur = mkHandler' (const $ pure ()) (const $
-        mutate' $ do
-            this._editing .= NotEditing
+        noisyMutate $ do
+            this._editing .= False
             this._value %= J.strip)
 
     onKeyDown = mkHandler' fromKeyDown hdlKeyDown
@@ -103,14 +106,14 @@ todoInput this = input (Tagged @"InputChange" ()) (this._value)
             -- So there is no adverse interation with input onChange
             -- updating the value under our feet.
             "Enter" -> do
-                    a <- fromJustM $ mutate' $ do
+                    a <- fromJustM $ noisyMutate $ do
                         v <- use (this._value)
                         let v' = J.strip v
                         if J.null v'
                             then
                                 pure $ Just $ Tagged @"TodoDestroy" ()
                             else do
-                                this._editing .= NotEditing
+                                this._editing .= False
                                 this._value .= v'
                                 pure Nothing
                     observe' a
@@ -138,39 +141,33 @@ todo ::
     , MonadObserver' (Tagged "TodoDestroy" ()) m
     , MonadObserver' (Tagged "InputChange" ()) m
     )
-    => Traversal' s Todo
+    => ReactId
+    -> Traversal' s Todo
     -> m ()
-todo this = do
+todo scratchId this = do
     initRendered onRendered
     bh "li" []
         [("className", classNames
             [("completed", preview $ this._completed)
-            ,("editing", preview $ this._editing.to isEditing)])]
+            ,("editing", preview $ this._editing)])]
         $ do
             todoView'
             todoInput this
   where
-    isEditing NotEditing = False
-    isEditing _ = True
-
     todoView' = (`runObserverT` hdlStartEdit) $ todoView this
 
     -- hdlStartEdit :: Tagged "TodoStartEdit" () -> m ()
-    hdlStartEdit (untag' @"TodoStartEdit" @DOM.HTMLElement -> t) =
+    hdlStartEdit (untag' @"TodoStartEdit" @DOM.HTMLElement -> t) = do
+        setScratch scratchId "todo" t
         -- this will change the CSS style to make the label editable
-        mutate' $ this._editing .= Focusing t
-
+        noisyMutate $ this._editing .= True
     onRendered = do
-        s <- askModel
-        e <- fromJustM $ pure $ preview (this._editing) s
-        case e of
-            Focusing t -> do
-                mutate RerenderNotRequired $ this._editing .= Editing
-                -- we can only focus after the label become visible after CSS rerender
-                DOM.focus t
-                v <- fromJustM $ fromJS @JSString <$> getProperty t "value"
-                setProperty t ("selectionStart", toJS @Int 0)
-                setProperty t ("selectionEnd", toJS $ J.length v)
-            _ -> pure ()
+        t <- fromJustM $ fromJS @DOM.HTMLElement <$> getScratch scratchId "todo"
+        deleteScratch scratchId "todo"
+        -- we can only focus after the label become visible after CSS rerender
+        DOM.focus t
+        v <- fromJustM $ fromJS @JSString <$> getProperty t "value"
+        setProperty t "selectionStart" (toJS @Int 0)
+        setProperty t "selectionEnd" (toJS $ J.length v)
 
 
