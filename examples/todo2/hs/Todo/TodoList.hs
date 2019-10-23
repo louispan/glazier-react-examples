@@ -44,7 +44,7 @@ footer this = do
     bh "footer" [] [("className", "footer")] $ do
         bh "span" [] [("className", "todo-count"), ("key", "todo-count")] $ do
             bh "strong" [] [("key", "items")] $
-                txt $ const $ fromString $ show activeCount
+                txt $ fromString $ show activeCount
             txt " items left"
         bh "ul" [] [("className", "filters"), ("key", "filters")] $ do
             bh "li" [] [("key", "filter-all")] $

@@ -73,7 +73,7 @@ todoDestroy = lf "button" [("onClick", onClick)]
 todoLabel :: (MonadWidget s m, MonadObserver' (Tagged "TodoStartEdit" DOM.HTMLElement) m)
     => Traversal' s Todo -> m ()
 todoLabel this = bh "label" [("onDoubleClick", onDoubleClick)] []
-    (txt (view $ this._value))
+    (txt (preview $ this._value))
   where
     fromDoubleClick = fromJustM . pure . viaJS @DOM.HTMLElement . DOM.target
     onDoubleClick = mkHandler' fromDoubleClick $ \t ->

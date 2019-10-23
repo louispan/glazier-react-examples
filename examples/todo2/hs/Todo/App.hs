@@ -88,31 +88,15 @@ todoInput scratchId this = input (this._newTodo)
     onRef = mkHandler pure hdlRef
 
     hdlRef j = do
-        d <- fromJS @Bool <$> getScratch scratchId "newTodoFocused"
-        case d of
-            Just True -> pure ()
-            _ -> do
-                setScratch scratchId "newTodoFocused" True
-                j' <- fromJustM $ pure $ viaJS @DOM.HTMLElement j
-                DOM.focus j'
+        scratchXTimes 1 scratchId "newTodoFocused" $ do
+            j' <- fromJustM $ pure $ viaJS @DOM.HTMLElement j
+            DOM.focus j'
 
-
---     hdlMounted ::
---         ( AsReactor c
---         , AsHTMLElement c
---         )
---         => Gadget c o J.JSString ()
---     hdlMounted = onMounted $ do
---         j <- getReactRef k
---         exec $ Focus j
-
--- appToggleCompleteAll :: (AsReactor c)
---     => ReactId -> Widget c o TD.TodoCollection r
--- appToggleCompleteAll k =
---     let win = do
---             mdl <- ask
---             props <- lift $ mkProps mdl
---             lf' k "input" (DL.fromList props)
+-- toggleCompleteAll :: MonadWidget s m => Traversal' s App -> m ()
+-- toggleCompleteAll this = lf checkbox [("onChange", onChange)]
+--     [ ("className", "toggle-all")
+--     , ("checked", JE.toJSR <$> (hasActiveTodos (mdl ^. _meta.W._visibleList)))
+--     ]
 --         gad = -- (finish $ onElementalRef k) `also`
 --             (finish $ hdlChange)
 --     in (display win) `also` (lift gad)
