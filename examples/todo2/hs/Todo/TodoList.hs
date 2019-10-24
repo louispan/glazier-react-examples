@@ -51,7 +51,7 @@ footer this = do
                 bh "a" [] [ ("href", "#/")
                         , ("key", "all")
                         , ("className", classNames
-                            [("selected", preview $ this._filterCriteria.to (== All))])
+                            [("selected", premodel $ this._filterCriteria.to (== All))])
                         ] $
                 txt "All"
             txt " "
@@ -59,7 +59,7 @@ footer this = do
                 bh "a" [] [ ("href", "#/active")
                         , ("key", "active")
                         , ("className", classNames
-                            [("selected", preview $ this._filterCriteria.to (== Active))])
+                            [("selected", premodel $ this._filterCriteria.to (== Active))])
                         ] $
                     txt "Active"
             txt " "
@@ -67,7 +67,7 @@ footer this = do
                 bh "a" [] [ ("href", "#/completed")
                         , ("key", "completed")
                         , ("className", classNames
-                            [("selected", preview $ this._filterCriteria.to (== Completed))])
+                            [("selected", premodel $ this._filterCriteria.to (== Completed))])
                         ] $
                     txt "Completed"
         if (completedCount > 0)

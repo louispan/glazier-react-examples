@@ -92,29 +92,30 @@ todoInput scratchId this = input (this._newTodo)
             j' <- fromJustM $ pure $ viaJS @DOM.HTMLElement j
             DOM.focus j'
 
--- toggleCompleteAll :: MonadWidget s m => Traversal' s App -> m ()
--- toggleCompleteAll this = lf checkbox [("onChange", onChange)]
---     [ ("className", "toggle-all")
---     , ("checked", JE.toJSR <$> (hasActiveTodos (mdl ^. _meta.W._visibleList)))
---     ]
---         gad = -- (finish $ onElementalRef k) `also`
---             (finish $ hdlChange)
---     in (display win) `also` (lift gad)
---   where
---     mkProps :: Meta TD.TodoCollection -> Benign IO [JE.Property]
---     mkProps mdl = traverse sequenceA
---         [ ("key", pure $ reactIdKey' k)
---         , ("className", pure "toggle-all")
---         , ("type", pure $ "checkbox")
---         , ("checked", JE.toJSR <$> (hasActiveTodos (mdl ^. _meta.W._visibleList)))
---         ]
+toggleCompleteAll :: MonadWidget s m => Traversal' s App -> m ()
+toggleCompleteAll this = lf checkbox [("onChange", onChange)]
+    [ ("className", "toggle-all")
+    , ("checked", JE.toJSR <$> (hasActiveTodos (mdl ^. _meta.W._visibleList)))
+    ]
+        gad = -- (finish $ onElementalRef k) `also`
+            (finish $ hdlChange)
+    in (display win) `also` (lift gad)
+  where
+    mkProps :: Meta TD.TodoCollection -> Benign IO [JE.Property]
+    mkProps mdl = traverse sequenceA
+        [ ("key", pure $ reactIdKey' k)
+        , ("className", pure "toggle-all")
+        , ("type", pure $ "checkbox")
+        -- checked if all completed (ie there are no active todos)
+        , ("checked", JE.toJSR <$> (hasActiveTodos (mdl ^. _meta.W._visibleList)))
+        ]
 
---     hasActiveTodos :: [Obj TD.Todo] -> Benign IO Bool
---     hasActiveTodos = fmap getAny . getAp . foldMap go
---       where
---         go obj = Ap $ do
---             mdl <- benignReadIORef $ sceneRef obj
---             pure $ Any $ mdl ^. _meta.TD._completed
+    hasActiveTodos :: [Obj Todo] -> m Bool
+    hasActiveTodos tds = do
+        tds' <- filterM isActive tds
+        pure (length tds' > 0)
+      where
+        isActive obj = (not . completed) <$> (readObj obj)
 
 --     hdlChange :: (AsReactor c) => Gadget c o TD.TodoCollection ()
 --     hdlChange = do

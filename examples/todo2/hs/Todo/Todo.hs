@@ -73,7 +73,7 @@ todoDestroy = lf "button" [("onClick", onClick)]
 todoLabel :: (MonadWidget s m, MonadObserver' (Tagged "TodoStartEdit" DOM.HTMLElement) m)
     => Traversal' s Todo -> m ()
 todoLabel this = bh "label" [("onDoubleClick", onDoubleClick)] []
-    (txt (preview $ this._value))
+    (txt (premodel $ this._value))
   where
     fromDoubleClick = fromJustM . pure . viaJS @DOM.HTMLElement . DOM.target
     onDoubleClick = mkHandler' fromDoubleClick $ \t ->
@@ -148,8 +148,8 @@ todo scratchId this = do
     initRendered onRendered
     bh "li" []
         [("className", classNames
-            [("completed", preview $ this._completed)
-            ,("editing", preview $ this._editing)])]
+            [("completed", premodel $ this._completed)
+            ,("editing", premodel $ this._editing)])]
         $ do
             todoView'
             todoInput this
