@@ -56,7 +56,7 @@ instance Applicative m => A.AToJSON m Todo
 
 todoToggleComplete ::
     ( HasCallStack
-    , AsReactor c
+    , AsReactant c
     , MonadWidget c s m
     , Observer (Tagged "TodoToggleComplete" ()) m
     )
@@ -67,7 +67,7 @@ todoToggleComplete this = reobserve (retag' @"InputChange" @"TodoToggleComplete"
 
 todoDestroy ::
     ( HasCallStack
-    , AsReactor c
+    , AsReactant c
     , MonadWidget c s m
     , Observer (Tagged "TodoDestroy" ()) m
     )
@@ -81,7 +81,7 @@ todoDestroy =
 
 todoLabel ::
     ( HasCallStack
-    , AsReactor c
+    , AsReactant c
     , MonadWidget c s m
     , Observer (Tagged "TodoStartEdit" ()) m
     )
@@ -93,7 +93,7 @@ todoLabel this = bh "label" [onDoubleClick] [] (rawTxt . view $ this._value)
 
 todoInput ::
     ( HasCallStack
-    , AsReactor c
+    , AsReactant c
     , AsJavascript c
     , AsHTMLElement c
     , MonadWidget c s m
@@ -135,7 +135,7 @@ todoInput this = W.textInput (this._value) [hdlBlur, hdlKeyDown]
 
 todoView ::
     ( HasCallStack
-    , AsReactor c
+    , AsReactant c
     , MonadWidget c s m
     , Observer (Tagged "TodoToggleComplete" ()) m
     , Observer (Tagged "TodoDestroy" ()) m
@@ -150,7 +150,7 @@ todoView this = bh "div" [] [("className", strProp "view")] $
 
 todo ::
     ( HasCallStack
-    , AsReactor c
+    , AsReactant c
     , AsJavascript c
     , AsHTMLElement c
     , MonadWidget c s m

@@ -38,7 +38,7 @@ type TodoCollection = W.DynamicCollection TD.Filter () UKey (Obj TD.Todo)
 todoDisplay :: ReactId -> Window TodoCollection ()
 todoDisplay ::
     ( HasCallStack
-    , AsReactor c
+    , AsReactant c
     , MonadWidget c s m
     )
     => Traversal' s J.JSString
@@ -96,7 +96,7 @@ todoDisplay this = do
            else alsoZero
 
 -- | The 'JE.JSRep' arg should be @document.defaultView@ or @window@
-todoCollection :: (AsReactor c, AsJavascript c)
+todoCollection :: (AsReactant c, AsJavascript c)
     => JE.JSRep -> ReactId -> Widget c o TodoCollection r
 todoCollection j k =
     let win = todoDisplay k
@@ -105,7 +105,7 @@ todoCollection j k =
             `also` (finish $ hdlMounted k j)
     in (display win) `also` (lift gad)
 
-hdlClearCompleted :: (AsReactor c) => ReactId -> Gadget c o TodoCollection ()
+hdlClearCompleted :: (AsReactant c) => ReactId -> Gadget c o TodoCollection ()
 hdlClearCompleted k = do
     trigger_ k "onClick" ()
     mutate k $ do
@@ -120,14 +120,14 @@ hdlClearCompleted k = do
         x' <- benignReadIORef $ sceneRef x
         pure $ x' ^. _meta.TD._completed.to not
 
-hdlHashChange :: (AsReactor c) => ReactId -> JE.JSRep -> Gadget c o TodoCollection ()
+hdlHashChange :: (AsReactant c) => ReactId -> JE.JSRep -> Gadget c o TodoCollection ()
 hdlHashChange k j = do
     ftr <- mapHashChange <$> domTrigger j "hashchange" whenHashChange
     mutate k $ W._filterCriteria .= ftr
 
 -- | The 'JE.JSRep' arg should be @document.defaultView@ or @window@
 hdlMounted ::
-    ( AsReactor c
+    ( AsReactant c
     , AsJavascript c
     )
     => ReactId -> JE.JSRep -> Gadget c o TodoCollection ()

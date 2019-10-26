@@ -34,7 +34,7 @@ main = pure ()
 -- newtype AppCmd = AppCmd { unAppCmd :: Which (CmdTypes AppCmd AppCmd)}
 --     -- deriving Show
 -- -- The main app will need IO effects in order to get the initial state via MVar.
--- type instance CmdTypes AppCmd c = '[IO c, [c], ReactorCmd c, HTMLElementCmd, JavaScriptCmd c]
+-- type instance CmdTypes AppCmd c = '[IO c, [c], ReactantCmd c, HTMLElementCmd, JavaScriptCmd c]
 
 -- -- | Define AsFacet instances for all types in the variant
 -- -- UndecidableInstances!
@@ -44,16 +44,16 @@ main = pure ()
 -- maybeExecApp ::
 --     ( MonadUnliftIO m
 --     , MonadReader r m
---     , Has ReactorEnv r
+--     , Has ReactantEnv r
 --     , AsFacet (IO c) c
---     , AsReactor c
+--     , AsReactant c
 --     , AsJavascript c
 --     , AsHTMLElement c
 --     )
---     => (Proxy '[[c], ReactorCmd c, JavaScriptCmd c, HTMLElementCmd, IO c], (c -> m ()) -> c -> MaybeT m [c])
+--     => (Proxy '[[c], ReactantCmd c, JavaScriptCmd c, HTMLElementCmd, IO c], (c -> m ()) -> c -> MaybeT m [c])
 -- maybeExecApp executor c =
 --     maybeExec (done (traverse_ @[] executor)) c
---     `orMaybeExec` maybeExec (execReactorCmd executor) c
+--     `orMaybeExec` maybeExec (execReactantCmd executor) c
 --     `orMaybeExec` maybeExec (done (execJavascript executor)) c
 --     `orMaybeExec` maybeExec (done execHTMLElementCmd) c
 --     `orMaybeExec` maybeExec (done ((>>= executor) . liftIO)) c
@@ -67,7 +67,7 @@ main = pure ()
 -- main :: IO ()
 -- main = do
 --     root <- js_getElementById "root"
---     env <- mkReactorEnvIO
+--     env <- mkReactantEnvIO
 --     (`runReaderT` env) $ startApp
 --         execApp
 --         wid

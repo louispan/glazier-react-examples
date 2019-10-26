@@ -20,13 +20,13 @@ module Todo.App where
 import Control.Lens
 import Control.Lens.Misc
 import Control.Monad
-import Data.Functor.Compose
-import Control.Monad.Trans.Except
 import Control.Monad.Trans.Class
+import Control.Monad.Trans.Except
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Applicative as A
 import Data.Diverse.Profunctor
 import qualified Data.DList as DL
+import Data.Functor.Compose
 import qualified Data.JSString as J
 import qualified Data.Map.Strict as M
 import Data.Maybe
@@ -66,7 +66,7 @@ data App = App
 makeLenses_ ''App
 
 instance MonadIO m => A.AToJSON (Benign m) App
-instance (Applicative m, AsJavascript c, AsHTMLElement c, MonadReactor c m) => A.AFromJSON (ExceptT (Which '[TD.OnTodoToggleComplete (ReactId, UKey), TD.OnTodoDestroy (ReactId, UKey), OnTodoMutated (ReactId, UKey)]) m) App where
+instance (Applicative m, AsJavascript c, AsHTMLElement c, MonadReactant c m) => A.AFromJSON (ExceptT (Which '[TD.OnTodoToggleComplete (ReactId, UKey), TD.OnTodoDestroy (ReactId, UKey), OnTodoMutated (ReactId, UKey)]) m) App where
     aparseJSON = A.withObject "App" $ \v -> fmap initialize (aparse' v)
       where
         aparse' v = getCompose $ (,)
@@ -76,7 +76,7 @@ instance (Applicative m, AsJavascript c, AsHTMLElement c, MonadReactor c m) => A
             (v, xs) <- m
             xs' <- initialize' xs
             pure $ App v xs'
-        initialize' :: (AsJavascript c, AsHTMLElement c, MonadReactor c m) => W.DynamicCollection TD.Filter () UKey TD.Todo -> (ExceptT (Which '[TD.OnTodoToggleComplete (ReactId, UKey), TD.OnTodoDestroy (ReactId, UKey), OnTodoMutated (ReactId, UKey)]) m) TD.TodoCollection
+        initialize' :: (AsJavascript c, AsHTMLElement c, MonadReactant c m) => W.DynamicCollection TD.Filter () UKey TD.Todo -> (ExceptT (Which '[TD.OnTodoToggleComplete (ReactId, UKey), TD.OnTodoDestroy (ReactId, UKey), OnTodoMutated (ReactId, UKey)]) m) TD.TodoCollection
         initialize' W.DynamicCollection {..} = do
             xs <- M.traverseWithKey (\k -> ExceptT . doInsertTodo k) rawCollection
             let xs' = W.DynamicCollection filterCriteria sortCriteria [] xs
@@ -86,7 +86,7 @@ type OnNewTodo = Tagged "OnNewTodo"
 
 -- | Use a different ReactId when firing OnNewTodo so that it is easier
 -- to differentiate between onChanged typing events and new todo event.
-todoInput :: (AsReactor c, AsJavascript c, AsHTMLElement c)
+todoInput :: (AsReactant c, AsJavascript c, AsHTMLElement c)
     => ReactId -> ReactId -> Widget c o J.JSString (OnNewTodo (ReactId, J.JSString))
 todoInput onNewTodoK k =
     let wid = finish . void . overWindow fw $ W.textInput k
@@ -99,7 +99,7 @@ todoInput onNewTodoK k =
             >>= hdlKeyDown)
 
     hdlMounted ::
-        ( AsReactor c
+        ( AsReactant c
         , AsHTMLElement c
         )
         => Gadget c o J.JSString ()
@@ -107,7 +107,7 @@ todoInput onNewTodoK k =
         j <- getReactRef k
         exec $ Focus j
 
-    hdlKeyDown :: (AsReactor c) => KeyDownKey -> Gadget c o J.JSString (OnNewTodo (ReactId, J.JSString))
+    hdlKeyDown :: (AsReactant c) => KeyDownKey -> Gadget c o J.JSString (OnNewTodo (ReactId, J.JSString))
     hdlKeyDown (KeyDownKey _ key) =
         case key of
             -- NB. Enter and Escape doesn't generate a onChange event
@@ -129,7 +129,7 @@ todoInput onNewTodoK k =
 
             _ -> finish $ pure ()
 
-appToggleCompleteAll :: (AsReactor c)
+appToggleCompleteAll :: (AsReactant c)
     => ReactId -> Widget c o TD.TodoCollection r
 appToggleCompleteAll k =
     let win = do
@@ -155,7 +155,7 @@ appToggleCompleteAll k =
             mdl <- benignReadIORef $ sceneRef obj
             pure $ Any $ mdl ^. _meta.TD._completed
 
-    hdlChange :: (AsReactor c) => Gadget c o TD.TodoCollection ()
+    hdlChange :: (AsReactant c) => Gadget c o TD.TodoCollection ()
     hdlChange = do
         trigger_ k "onChange" ()
         -- logWarn $ pure "App ToggleAll"
@@ -168,7 +168,7 @@ appToggleCompleteAll k =
             -- lift from ContT to GadgetT
             lift . gadgetWith obj . mutate k $ TD._completed .= not a
 
-app_ :: (AsReactor c, AsJavascript c, AsHTMLElement c)
+app_ :: (AsReactant c, AsJavascript c, AsHTMLElement c)
     => JE.JSRep -> Widget c o App (OnNewTodo (ReactId, J.JSString))
 app_ j = do
     todoInputK <- mkReactId "todo-input"
@@ -218,31 +218,31 @@ app_ j = do
                     else updateTodos k
     wid `also` (lift gad)
 
-app :: (AsReactor c, AsJavascript c, AsHTMLElement c)
+app :: (AsReactant c, AsJavascript c, AsHTMLElement c)
     => JE.JSRep -> Widget c o App r
 app j = app_ j >>= (lift . insertTodo')
 
-updateTodos :: (AsReactor c)
+updateTodos :: (AsReactant c)
     => ReactId -> Gadget c o App ()
 updateTodos k = magnifiedEntity _todos $
     mutate k $ W.updateVisibleList todoFilterer todoSorter
 
-todoToggleCompleted :: (AsReactor c)
+todoToggleCompleted :: (AsReactant c)
     => TD.OnTodoToggleComplete (ReactId, UKey) -> Gadget c o App ()
 todoToggleCompleted (untag @"OnTodoToggleComplete" -> (k, _)) = updateTodos k
 
-destroyTodo :: (AsReactor c)
+destroyTodo :: (AsReactant c)
     => TD.OnTodoDestroy (ReactId, UKey) -> Gadget c o App ()
 destroyTodo (untag @"OnTodoDestroy" -> (k, i)) =
     mutate k $ _todos.W._rawCollection.(at i) .= Nothing
 
 type OnTodoMutated = Tagged "OnTodoMutated"
 
-tickedTodo :: (AsReactor c)
+tickedTodo :: (AsReactant c)
     => OnTodoMutated (ReactId, UKey) -> Gadget c o App ()
 tickedTodo (untag @"OnTodoMutated" -> (k, _)) = updateTodos k
 
-insertTodo :: (AsReactor c, AsJavascript c, AsHTMLElement c)
+insertTodo :: (AsReactant c, AsJavascript c, AsHTMLElement c)
     => OnNewTodo (ReactId, J.JSString) -> Gadget c o App
         (Which '[TD.OnTodoToggleComplete (ReactId, UKey), TD.OnTodoDestroy (ReactId, UKey), OnTodoMutated (ReactId, UKey)])
 insertTodo (untag @"OnNewTodo" -> (k, v)) = do
@@ -260,7 +260,7 @@ insertTodo (untag @"OnNewTodo" -> (k, v)) = do
   where
     lookupMax = listToMaybe . M.toDescList
 
-doInsertTodo :: (AsJavascript c, AsHTMLElement c, MonadReactor c m)
+doInsertTodo :: (AsJavascript c, AsHTMLElement c, MonadReactant c m)
     => UKey -> TD.Todo -> m
         (Either (Which '[TD.OnTodoToggleComplete (ReactId, UKey), TD.OnTodoDestroy (ReactId, UKey), OnTodoMutated (ReactId, UKey)]) (Obj TD.Todo))
 doInsertTodo i td = mkObj (decorateTodoEvents i <$> todo') td
@@ -283,7 +283,7 @@ decorateTodoEvents i = which $ cases
     decorateOnTodoDestroy (untag @"OnTodoDestroy" @ReactId -> k) = _id $ pickTag @"OnTodoDestroy" (k, i)
     decorateOnTodoMutated (untag @"OnTodoMutated" @ReactId -> k) = _id $ pickTag @"OnTodoMutated" (k, i)
 
-insertTodo' :: (AsReactor c, AsJavascript c, AsHTMLElement c)
+insertTodo' :: (AsReactant c, AsJavascript c, AsHTMLElement c)
     => OnNewTodo (ReactId, J.JSString) -> Gadget c o App r
 insertTodo' newTodoVal = insertTodo newTodoVal
     >>= (injectedK $ totally . finish . todoToggleCompleted . obvious)
