@@ -73,13 +73,13 @@ todoNewInput scratchId this = input (this._newTodo)
     fromKeyDown evt = case DOM.key <$> e of
         Just "Enter" -> do
             v <- fromJustIO $ fromJS <$> getProperty t "value"
-            setProperty t "value" ""
+            t `setProperty` "value" ""
             let v' = J.strip v
             if J.null v'
                 then empty
                 else pure v'
         Just "Escape" -> do
-            setProperty t "value" ""
+            t `setProperty` "value" ""
             empty
         _ -> empty
       where
@@ -117,6 +117,10 @@ toggleCompleteAll this = lf inputComponent [("onChange", onChange)]
         traverse_ (`shall` setComplete checked) xs
     setComplete checked = noisyMutate $ _completed .= checked
 
+activeTodoCount :: MonadModel s m => Traversal' s App -> Int
+activeTodoCount
+
+
 app :: (MonadWidget s m, MonadObserver' (Tagged "OnNewTodo" JSString) m)
     => ReactId -> Traversal' s App -> m ()
 app todoInputId this = do
@@ -131,6 +135,7 @@ app todoInputId this = do
                 lf "label" [] [("htmlFor","toggle-all")]
                 bh "ul" [] [("className", "todo-list")] $ do
                     pure ()
+
 
 -- app_ :: (AsReactant c, AsJavascript c, AsHTMLElement c)
 --     => JE.JSRep -> Widget c o App (OnNewTodo (ReactId, J.JSString))

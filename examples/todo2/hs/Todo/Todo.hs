@@ -166,8 +166,8 @@ todo scratchId this = do
         deleteScratch scratchId "todo"
         -- we can only focus after the label become visible after CSS rerender
         DOM.focus t
-        v <- fromJustM $ fromJS @JSString <$> getProperty t "value"
-        setProperty t "selectionStart" (toJS @Int 0)
-        setProperty t "selectionEnd" (toJS $ J.length v)
+        v <- fromJustM $ fromJS @JSString <$> t `getProperty` "value"
+        t `setProperty` ("selectionStart", toJS @Int 0)
+        t `setProperty` ("selectionEnd", toJS $ J.length v)
 
 
