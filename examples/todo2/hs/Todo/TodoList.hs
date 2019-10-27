@@ -34,10 +34,10 @@ makeLenses_ ''TodoList
 footer :: MonadWidget s m => Traversal' s TodoList -> m ()
 footer this = do
     initConstructor $ do
-        w <- fromJustM $ pure DOM.globalWindow
+        w <- guardJustM $ pure DOM.globalWindow
         listenEventTarget w "hashchange" fromHashChange hdlHashChange
 
-    xs <- fromJustM $ (preview $ this._todos) <$> askModel
+    xs <- guardJustM $ premodel $ this._todos
     (completes, actives) <- partitionM isCompleted xs
     let completedCount = length completes
         activeCount = length actives
@@ -79,7 +79,7 @@ footer this = do
   where
     isCompleted obj = completed <$> (readObj obj)
     fromHashChange j = do
-        newURL <- fromJustIO $ fromJS <$> getProperty j "newURL"
+        newURL <- guardJustIO $ fromJS <$> getProperty j "newURL"
         let (_, newHash) = J.breakOn "#" newURL
         pure newHash
     hdlHashChange newHash = do
@@ -88,14 +88,14 @@ footer this = do
             "#/completed" -> Completed
             _ -> All
     onClearCompletedClicked = mkHandler' (const $ pure ()) $ const $ do
-        xs <- fromJustM $ (preview $ this._todos) <$> askModel
+        xs <- guardJustM (premodel $ this._todos)
         actives <- filterM (fmap not. isCompleted) xs
         noisyMutate $ this._todos .= actives
 
 todoList :: MonadWidget s m => Traversal' s TodoList -> m ()
 todoList this = do
-    xs <- fromJustM $ (preview $ this._todos) <$> askModel
-    ftr <- fromJustM $ (preview $ this._filterCriteria) <$> askModel
+    xs <- guardJustM $ premodel $ this._todos
+    ftr <- guardJustM $ premodel $ this._filterCriteria
     ys <- filterM (isVisible ftr) xs
     traverse_ displayTodo ys
   where

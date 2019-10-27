@@ -75,7 +75,7 @@ todoLabel :: (MonadWidget s m, MonadObserver' (Tagged "TodoStartEdit" DOM.HTMLEl
 todoLabel this = bh "label" [("onDoubleClick", onDoubleClick)] []
     (txt (premodel $ this._value))
   where
-    fromDoubleClick = fromJustM . pure . viaJS @DOM.HTMLElement . DOM.target
+    fromDoubleClick = guardJustM . pure . viaJS @DOM.HTMLElement . DOM.target
     onDoubleClick = mkHandler' fromDoubleClick $ \t ->
         observe' $ Tagged @"TodoStartEdit" t
 
@@ -97,7 +97,7 @@ todoInput this = input (this._value)
             this._value %= J.strip)
 
     onKeyDown = mkHandler' fromKeyDown hdlKeyDown
-    fromKeyDown evt = fromJustM $ pure $ (\t' e' -> (t', DOM.key e')) <$> t <*> e
+    fromKeyDown evt = guardJustM $ pure $ (\t' e' -> (t', DOM.key e')) <$> t <*> e
       where
         e = viaJS @DOM.SyntheticKeyboardEvent evt
         t = viaJS @DOM.HTMLElement $ DOM.target evt
@@ -106,7 +106,7 @@ todoInput this = input (this._value)
             -- So there is no adverse interation with input onChange
             -- updating the value under our feet.
             "Enter" -> do
-                    a <- fromJustM $ noisyMutate $ do
+                    a <- guardJustM $ noisyMutate $ do
                         v <- use (this._value)
                         let v' = J.strip v
                         if J.null v'
@@ -162,11 +162,11 @@ todo scratchId this = do
         -- this will change the CSS style to make the label editable
         noisyMutate $ this._editing .= True
     onRendered = do
-        t <- fromJustM $ fromJS @DOM.HTMLElement <$> getScratch scratchId "todo"
+        t <- guardJustM $ fromJS @DOM.HTMLElement <$> getScratch scratchId "todo"
         deleteScratch scratchId "todo"
         -- we can only focus after the label become visible after CSS rerender
         DOM.focus t
-        v <- fromJustM $ fromJS @JSString <$> t `getProperty` "value"
+        v <- guardJustM $ fromJS @JSString <$> t `getProperty` "value"
         t `setProperty` ("selectionStart", toJS @Int 0)
         t `setProperty` ("selectionEnd", toJS $ J.length v)
 

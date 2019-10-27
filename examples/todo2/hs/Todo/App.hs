@@ -72,14 +72,14 @@ todoNewInput scratchId this = input (this._newTodo)
     fromKeyDown :: DOM.SyntheticEvent -> MaybeT IO JSString
     fromKeyDown evt = case DOM.key <$> e of
         Just "Enter" -> do
-            v <- fromJustIO $ fromJS <$> getProperty t "value"
-            t `setProperty` "value" ""
+            v <- guardJustIO $ fromJS <$> getProperty t "value"
+            t `setProperty` ("value", "")
             let v' = J.strip v
             if J.null v'
                 then empty
                 else pure v'
         Just "Escape" -> do
-            t `setProperty` "value" ""
+            t `setProperty` ("value", "")
             empty
         _ -> empty
       where
@@ -90,7 +90,7 @@ todoNewInput scratchId this = input (this._newTodo)
 
     hdlRef j = do
         scratchXTimes 1 scratchId "newTodoFocused" $ do
-            j' <- fromJustM $ pure $ viaJS @DOM.HTMLElement j
+            j' <- guardJustM $ pure $ viaJS @DOM.HTMLElement j
             DOM.focus j'
 
 toggleCompleteAll :: MonadWidget s m => Traversal' s App -> m ()
@@ -111,14 +111,14 @@ toggleCompleteAll this = lf inputComponent [("onChange", onChange)]
         isActive obj = (not . completed) <$> (readObj obj)
 
     onChange = mkHandler' fromChange handleChange
-    fromChange = fromJustIO . fmap fromJS . (`getProperty` "checked") . DOM.target
+    fromChange = guardJustIO . fmap fromJS . (`getProperty` "checked") . DOM.target
     handleChange checked = do
         xs <- model (this._todoList._todos)
         traverse_ (`shall` setComplete checked) xs
     setComplete checked = noisyMutate $ _completed .= checked
 
-activeTodoCount :: MonadModel s m => Traversal' s App -> Int
-activeTodoCount
+-- activeTodoCount :: MonadModel s m => Traversal' s App -> Int
+-- activeTodoCount
 
 
 app :: (MonadWidget s m, MonadObserver' (Tagged "OnNewTodo" JSString) m)
