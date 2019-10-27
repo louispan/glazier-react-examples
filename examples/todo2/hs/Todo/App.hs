@@ -80,6 +80,8 @@ todoNewInput scratchId this = input (this._newTodo)
                 else pure v'
         Just "Escape" -> do
             t `setProperty` ("value", "")
+
+
             empty
         _ -> empty
       where
@@ -97,19 +99,9 @@ toggleCompleteAll :: MonadWidget s m => Traversal' s App -> m ()
 toggleCompleteAll this = lf inputComponent [("onChange", onChange)]
     [ ("type", "checkbox")
     , ("className", "toggle-all")
-    , ("checked", isAllCompleted)
+    , ("checked", (toJS . (==) 0) <$> activeTodoCount (this._todoList._todos))
     ]
   where
-    -- allCompleted :: MonadGadget s m => m (Maybe JSVal)
-    isAllCompleted = (Just . toJS) <$> (model (this._todoList._todos) >>= hasNoActiveTodos)
-
-    -- hasActiveTodos :: MonadGadget s m => [Obj Todo] -> m Bool
-    hasNoActiveTodos tds = do
-        tds' <- filterM isActive tds
-        pure $ null tds'
-      where
-        isActive obj = (not . completed) <$> (readObj obj)
-
     onChange = mkHandler' fromChange handleChange
     fromChange = guardJustIO . fmap fromJS . (`getProperty` "checked") . DOM.target
     handleChange checked = do
@@ -117,8 +109,12 @@ toggleCompleteAll this = lf inputComponent [("onChange", onChange)]
         traverse_ (`shall` setComplete checked) xs
     setComplete checked = noisyMutate $ _completed .= checked
 
--- activeTodoCount :: MonadModel s m => Traversal' s App -> Int
--- activeTodoCount
+activeTodoCount :: MonadGadget s m => Traversal' s [Obj Todo] -> m Int
+activeTodoCount this = do
+    tds <- model this
+    length <$> filterM isActive tds
+  where
+    isActive obj = (not . completed) <$> (readObj obj)
 
 
 app :: (MonadWidget s m, MonadObserver' (Tagged "OnNewTodo" JSString) m)

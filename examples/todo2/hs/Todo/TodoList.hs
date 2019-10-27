@@ -37,7 +37,7 @@ footer this = do
         w <- guardJustM $ pure DOM.globalWindow
         listenEventTarget w "hashchange" fromHashChange hdlHashChange
 
-    xs <- guardJustM $ premodel $ this._todos
+    xs <- model $ this._todos
     (completes, actives) <- partitionM isCompleted xs
     let completedCount = length completes
         activeCount = length actives
@@ -52,7 +52,7 @@ footer this = do
                 bh "a" [] [ ("href", "#/")
                         , ("key", "all")
                         , ("className", classNames
-                            [("selected", premodel $ this._filterCriteria.to (== All))])
+                            [("selected", model $ this._filterCriteria.to (== All))])
                         ] $
                 txt "All"
             txt " "
@@ -60,7 +60,7 @@ footer this = do
                 bh "a" [] [ ("href", "#/active")
                         , ("key", "active")
                         , ("className", classNames
-                            [("selected", premodel $ this._filterCriteria.to (== Active))])
+                            [("selected", model $ this._filterCriteria.to (== Active))])
                         ] $
                     txt "Active"
             txt " "
@@ -68,7 +68,7 @@ footer this = do
                 bh "a" [] [ ("href", "#/completed")
                         , ("key", "completed")
                         , ("className", classNames
-                            [("selected", premodel $ this._filterCriteria.to (== Completed))])
+                            [("selected", model $ this._filterCriteria.to (== Completed))])
                         ] $
                     txt "Completed"
         if (completedCount > 0)
@@ -88,14 +88,14 @@ footer this = do
             "#/completed" -> Completed
             _ -> All
     onClearCompletedClicked = mkHandler' (const $ pure ()) $ const $ do
-        xs <- guardJustM (premodel $ this._todos)
+        xs <- model $ this._todos
         actives <- filterM (fmap not. isCompleted) xs
         noisyMutate $ this._todos .= actives
 
 todoList :: MonadWidget s m => Traversal' s TodoList -> m ()
 todoList this = do
-    xs <- guardJustM $ premodel $ this._todos
-    ftr <- guardJustM $ premodel $ this._filterCriteria
+    xs <- model $ this._todos
+    ftr <- model $ this._filterCriteria
     ys <- filterM (isVisible ftr) xs
     traverse_ displayTodo ys
   where
