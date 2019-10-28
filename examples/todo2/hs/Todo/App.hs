@@ -12,6 +12,7 @@
 
 module Todo.App where
 
+import Control.Monad.Extra
 import Data.Foldable
 import qualified Data.JSString as J
 import qualified GHC.Generics as G
@@ -22,18 +23,6 @@ import Todo.Todo
 import Todo.TodoList
 
 default (JSString)
-
--- -- | Just use map order
--- todoSorter :: Applicative m => srt -> a -> a -> m Ordering
--- todoSorter _ _ _ = pure LT
-
--- todoFilterer :: TD.Filter -> Obj TD.Todo -> Benign IO Bool
--- todoFilterer ftr td = do
---     td' <- meta <$> (benignReadIORef $ sceneRef td)
---     pure $ case ftr of
---         TD.All -> True
---         TD.Active -> not $ TD.completed $ td'
---         TD.Completed -> TD.completed $ td'
 
 data App = App
     { newTodo :: J.JSString
@@ -59,8 +48,6 @@ makeLenses_ ''App
 --             let xs' = W.DynamicCollection filterCriteria sortCriteria [] xs
 --             lift $ evalBenignIO $ execStateT (W.updateVisibleList todoFilterer todoSorter) xs'
 
--- type OnNewTodo = Tagged "OnNewTodo"
-
 todoNewInput :: (MonadWidget s m, MonadObserver' (Tagged "OnNewTodo" JSString) m)
     => ReactId -> Traversal' s App -> m ()
 todoNewInput scratchId this = input (this._newTodo)
@@ -80,8 +67,6 @@ todoNewInput scratchId this = input (this._newTodo)
                 else pure v'
         Just "Escape" -> do
             t `setProperty` ("value", "")
-
-
             empty
         _ -> empty
       where
@@ -116,73 +101,23 @@ activeTodoCount this = do
   where
     isActive obj = (not . completed) <$> (readObj obj)
 
-
 app :: (MonadWidget s m, MonadObserver' (Tagged "OnNewTodo" JSString) m)
     => ReactId -> Traversal' s App -> m ()
 app todoInputId this = do
-    bh "div" [] [] $ do
+    Tagged v <- unobserve @(Tagged "OnNewTodo" JString) $ bh "div" [] [] $ do
         bh "header" [] [("className", "header")] $ do
             bh "h1" [] [] (txt "todos")
             todoNewInput todoInputId this
-        xs <- model (this._todoList._todos)
-        when (not $ null xs) $ do
+
+        whenM (model $ this._todoList._todos.to null.to not) $ do
             bh "section" [] [("className", "main")] $ do
                 toggleCompleteAll this
                 lf "label" [] [("htmlFor","toggle-all")]
                 bh "ul" [] [("className", "todo-list")] $ do
-                    pure ()
+                    todoItems (this._todoList)
+            footer (this._todoList)
 
-
--- app_ :: (AsReactant c, AsJavascript c, AsHTMLElement c)
---     => JE.JSRep -> Widget c o App (OnNewTodo (ReactId, J.JSString))
--- app_ j = do
---     todoInputK <- mkReactId "todo-input"
---     todoListK <- mkReactId "todo-list"
---     let newTodo' = magnifyWidget _newTodo $ todoInput todoListK todoInputK
---         appToggleCompleteAll' = magnifyWidget _todos $ mkReactId "complete-all" >>= appToggleCompleteAll
---         todoFooter' = magnifyWidget _todos $ mkReactId "todo-footer" >>= TD.todoFooter j
---         todosWindow = modifyMarkup (overSurfaceProperties
---             (<> [("className", "todo-list")]))
---             (W.dynamicCollectionWindow todoListK)
---         wid = withWindow newTodo' $ \newTodoWin ->
---             withWindow appToggleCompleteAll' $ \appToggleCompleteAllWin ->
---             withWindow todoFooter' $ \todoFooterWin ->
---                 let win = do
---                         s <- ask
---                         bh "div" [("key", "app")] $ do
---                             bh "header" [("key", "header"), ("className", "header")] $ do
---                                 bh "h1" [("key", "heading")] (txt "todos")
---                                 newTodoWin
-
---                             -- only render if there are todos
---                             let ts = s ^. _meta._todos.W._rawCollection
---                             if M.null ts
---                                 then pure ()
---                                 else bh "section" [ ("key", "main")
---                                                         , ("className", "main")
---                                                         ] $ do
---                                     -- Complete all checkbox
---                                     appToggleCompleteAllWin
-
---                                     -- Render the list of todos
---                                     magnifiedMeta _todos todosWindow
-
---                                     -- Render the footer
---                                     todoFooterWin
---                 in display win
---         gad = finish $ do
---             -- FIXME: this is being called on every keystroke in the input!
---             -- FIXME: don't update visible if k is from new-todo
---             debugIO_ $ putStrLn "__FILE__hello"
---             logError $ pure "App Mutated"
---             logInfo $ pure "Hello, world!"
---             onMutated $ \k ->
---                 -- ignore updates from the new-todo input box while typing
---                 if k == todoInputK
---                     then pure ()
---                     else updateTodos k
---     wid `also` (lift gad)
-
+    pure ()
 -- app :: (AsReactant c, AsJavascript c, AsHTMLElement c)
 --     => JE.JSRep -> Widget c o App r
 -- app j = app_ j >>= (lift . insertTodo')

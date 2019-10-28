@@ -27,7 +27,7 @@ executable todo
   build-depends:       base >= 4.7 && < 5
                      -- , aeson >= 1.4.2
                      -- , aeson-applicative >= 1.4
-                     -- , alternators >= 2.0
+                     , alternators >= 2.0
                      -- , bytestring >= 0.10
                      -- , containers >= 0.5
                      -- , data-diverse >= 4.6

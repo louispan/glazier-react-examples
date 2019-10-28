@@ -141,29 +141,27 @@ todo ::
     , MonadObserver' (Tagged "TodoDestroy" ()) m
     , MonadObserver' (Tagged "InputChange" ()) m
     )
-    => ReactId
-    -> Traversal' s Todo
+    => Traversal' s Todo
     -> m ()
-todo scratchId this = do
-    initRendered onRendered
+todo this = do
     bh "li" []
         [("className", classNames
             [("completed", model $ this._completed)
             ,("editing", model $ this._editing)])]
         $ do
-            todoView'
+            k <- reactPathStr <$> askReactPath
+            initRendered $ onRendered k
+            (`runObserverT` hdlStartEdit k)) $ todoView this
             todoInput this
   where
-    todoView' = (`runObserverT` hdlStartEdit) $ todoView this
-
     -- hdlStartEdit :: Tagged "TodoStartEdit" () -> m ()
-    hdlStartEdit (untag' @"TodoStartEdit" @DOM.HTMLElement -> t) = do
-        setScratch scratchId "todo" t
+    hdlStartEdit k (untag' @"TodoStartEdit" @DOM.HTMLElement -> t) = do
+        setScratch k "todo" t
         -- this will change the CSS style to make the label editable
         noisyMutate $ this._editing .= True
-    onRendered = do
-        t <- guardJustM $ fromJS @DOM.HTMLElement <$> getScratch scratchId "todo"
-        deleteScratch scratchId "todo"
+    onRendered k = do
+        t <- guardJustM $ fromJS @DOM.HTMLElement <$> getScratch k "todo"
+        deleteScratch k "todo"
         -- we can only focus after the label become visible after CSS rerender
         DOM.focus t
         v <- guardJustM $ fromJS @JSString <$> t `getProperty` "value"

@@ -92,8 +92,8 @@ footer this = do
         actives <- filterM (fmap not. isCompleted) xs
         noisyMutate $ this._todos .= actives
 
-todoList :: MonadWidget s m => Traversal' s TodoList -> m ()
-todoList this = do
+todoItems :: MonadWidget s m => Traversal' s TodoList -> m ()
+todoItems this = do
     xs <- model $ this._todos
     ftr <- model $ this._filterCriteria
     ys <- filterM (isVisible ftr) xs
