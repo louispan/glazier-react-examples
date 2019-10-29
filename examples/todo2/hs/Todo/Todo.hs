@@ -9,7 +9,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ViewPatterns #-}
 
 module Todo.Todo where
     -- ( Todo(..)
@@ -25,6 +24,7 @@ module Todo.Todo where
 -- import qualified Data.Aeson.Applicative as A
 
 import qualified Data.JSString as J
+import Data.Tagged.Extras
 import qualified GHC.Generics as G
 import qualified Glazier.DOM as DOM
 import Glazier.React
@@ -32,14 +32,14 @@ import Glazier.React.Widgets.Input
 
 default (JSString)
 
--- data Editing = NotEditing | Editing | Focusing DOM.HTMLElement
---     deriving (Show, G.Generic)
+data Editing = NotEditing | Focusing | Editing
+    deriving (Show, Read, Eq, Ord, G.Generic)
 
 data Todo = Todo
     { value :: JSString
     , completed :: Bool
-    , editing :: Bool
-    } deriving (Show, G.Generic)
+    , editing :: Editing
+    } deriving (Show, Read, Eq, Ord, G.Generic)
 
 makeLenses_ ''Todo
 
@@ -70,14 +70,12 @@ todoDestroy = lf "button" [("onClick", onClick)]
     onClick = mkHandler' (const $ pure ()) $
         const $ observe' $ Tagged @"TodoDestroy" ()
 
-todoLabel :: (MonadWidget s m, MonadObserver' (Tagged "TodoStartEdit" DOM.HTMLElement) m)
+todoLabel :: (MonadWidget s m, MonadObserver' (Tagged "TodoStartEdit" ()) m)
     => Traversal' s Todo -> m ()
 todoLabel this = bh "label" [("onDoubleClick", onDoubleClick)] []
     (txt (model $ this._value))
   where
-    fromDoubleClick = guardJustM . pure . viaJS @DOM.HTMLElement . DOM.target
-    onDoubleClick = mkHandler' fromDoubleClick $ \t ->
-        observe' $ Tagged @"TodoStartEdit" t
+    onDoubleClick = mkHandler' (const $ pure ()) $ const $ observe' $ Tagged @"TodoStartEdit" ()
 
 todoInput ::
     ( MonadWidget s m
@@ -93,7 +91,7 @@ todoInput this = input (this._value)
     onChange = mkHandler' (const $ pure ()) (const $ observe' $ Tagged @"InputChange" ())
     onBlur = mkHandler' (const $ pure ()) (const $
         noisyMutate $ do
-            this._editing .= False
+            this._editing .= NotEditing
             this._value %= J.strip)
 
     onKeyDown = mkHandler' fromKeyDown hdlKeyDown
@@ -113,7 +111,7 @@ todoInput this = input (this._value)
                             then
                                 pure $ Just $ Tagged @"TodoDestroy" ()
                             else do
-                                this._editing .= False
+                                this._editing .= NotEditing
                                 this._value .= v'
                                 pure Nothing
                     observe' a
@@ -126,7 +124,7 @@ todoView ::
     ( MonadWidget s m
     , MonadObserver' (Tagged "TodoToggleComplete" ()) m
     , MonadObserver' (Tagged "TodoDestroy" ()) m
-    , MonadObserver' (Tagged "TodoStartEdit" DOM.HTMLElement) m
+    , MonadObserver' (Tagged "TodoStartEdit" ()) m
     )
     => Traversal' s Todo
     -> m ()
@@ -144,28 +142,29 @@ todo ::
     => Traversal' s Todo
     -> m ()
 todo this = do
-    bh "li" []
+    bh "li" [("onRendered", onRendered)]
         [("className", classNames
             [("completed", model $ this._completed)
-            ,("editing", model $ this._editing)])]
+            ,("editing", model $ this._editing.to (== Editing))])]
         $ do
-            k <- reactPathStr <$> askReactPath
-            initRendered $ onRendered k
-            (`runObserverT` hdlStartEdit k)) $ todoView this
+            (`runObserverT` (hdlStartEdit . untag' @"TodoStartEdit")) $ todoView this
             todoInput this
   where
     -- hdlStartEdit :: Tagged "TodoStartEdit" () -> m ()
-    hdlStartEdit k (untag' @"TodoStartEdit" @DOM.HTMLElement -> t) = do
-        setScratch k "todo" t
+    hdlStartEdit () = do
         -- this will change the CSS style to make the label editable
-        noisyMutate $ this._editing .= True
-    onRendered k = do
-        t <- guardJustM $ fromJS @DOM.HTMLElement <$> getScratch k "todo"
-        deleteScratch k "todo"
-        -- we can only focus after the label become visible after CSS rerender
-        DOM.focus t
-        v <- guardJustM $ fromJS @JSString <$> t `getProperty` "value"
-        t `setProperty` ("selectionStart", toJS @Int 0)
-        t `setProperty` ("selectionEnd", toJS $ J.length v)
+        noisyMutate $ this._editing .= Focusing
+    onRendered = mkHandler pure hdlRendered
+    hdlRendered j = do
+        e <- model $ this._editing
+        case e of
+            Focusing -> do
+                quietMutate $ this._editing .= Editing
+                t <- guardJust $ fromJS @DOM.HTMLElement j
+                DOM.focus t
+                v <- guardJustM $ fromJS @JSString <$> t `getProperty` "value"
+                t `setProperty` ("selectionStart", toJS @Int 0)
+                t `setProperty` ("selectionEnd", toJS $ J.length v)
+            _ -> pure ()
 
 
