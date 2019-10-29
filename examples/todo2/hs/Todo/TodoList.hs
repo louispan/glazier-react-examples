@@ -33,16 +33,12 @@ makeLenses_ ''TodoList
 
 footer :: MonadWidget s m => Traversal' s TodoList -> m ()
 footer this = do
-    initConstructor $ do
-        w <- guardJustM $ pure DOM.globalWindow
-        listenEventTarget w "hashchange" fromHashChange hdlHashChange
-
     xs <- model $ this._todos
     (completes, actives) <- partitionM isCompleted xs
     let completedCount = length completes
         activeCount = length actives
 
-    bh "footer" [] [("className", "footer")] $ do
+    bh "footer" [("onMount", onMount)] [("className", "footer")] $ do
         bh "span" [] [("className", "todo-count"), ("key", "todo-count")] $ do
             bh "strong" [] [("key", "items")] $
                 txt $ fromString $ show activeCount
@@ -77,7 +73,9 @@ footer this = do
                     txt "Clear completed"
            else pure ()
   where
-    isCompleted obj = completed <$> (readObj obj)
+    onMount = mkHandler (const $ pure ()) $ const $ do
+        w <- guardJustM $ pure DOM.globalWindow
+        listenEventTarget w "hashchange" fromHashChange hdlHashChange
     fromHashChange j = do
         newURL <- guardJustIO $ fromJS <$> getProperty j "newURL"
         let (_, newHash) = J.breakOn "#" newURL
@@ -87,9 +85,10 @@ footer this = do
             "#/active" -> Active
             "#/completed" -> Completed
             _ -> All
+    isCompleted obj = completed <$> (readObj obj)
     onClearCompletedClicked = mkHandler' (const $ pure ()) $ const $ do
         xs <- model $ this._todos
-        actives <- filterM (fmap not. isCompleted) xs
+        actives <- filterM (fmap not . isCompleted) xs
         noisyMutate $ this._todos .= actives
 
 todoItems :: MonadWidget s m => Traversal' s TodoList -> m ()

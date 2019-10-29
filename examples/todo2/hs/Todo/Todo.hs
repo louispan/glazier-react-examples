@@ -9,6 +9,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Todo.Todo where
     -- ( Todo(..)
@@ -147,12 +148,13 @@ todo this = do
             [("completed", model $ this._completed)
             ,("editing", model $ this._editing.to (== Editing))])]
         $ do
-            (`runObserverT` (hdlStartEdit . untag' @"TodoStartEdit")) $ todoView this
+            (`runObserverT` hdlStartEdit) $ todoView this
             todoInput this
   where
     -- hdlStartEdit :: Tagged "TodoStartEdit" () -> m ()
-    hdlStartEdit () = do
-        -- this will change the CSS style to make the label editable
+    hdlStartEdit (untag' @"TodoStartEdit" -> ()) = do
+        -- this will change the CSS style to make the label visible
+        -- so we can't focus until label has been rendered
         noisyMutate $ this._editing .= Focusing
     onRendered = mkHandler pure hdlRendered
     hdlRendered j = do

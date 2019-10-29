@@ -104,7 +104,7 @@ activeTodoCount this = do
 app :: (MonadWidget s m, MonadObserver' (Tagged "OnNewTodo" JSString) m)
     => ReactId -> Traversal' s App -> m ()
 app todoInputId this = do
-    Tagged v <- unobserve @(Tagged "OnNewTodo" JString) $ bh "div" [] [] $ do
+    Tagged v <- unobserve @(Tagged "OnNewTodo" JSString) $ bh "div" [] [] $ do
         bh "header" [] [("className", "header")] $ do
             bh "h1" [] [] (txt "todos")
             todoNewInput todoInputId this
