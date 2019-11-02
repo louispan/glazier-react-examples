@@ -57,12 +57,12 @@ makeLenses_ ''Todo
 -- data TodoStartEdit = TodoStartEdit
 
 todoToggleComplete ::
-    (MonadWidget s m, MonadObserver' (Tagged "TodoToggleComplete" ()) m)
+    (MonadWidget s m)
     => Traversal' s Todo -> m ()
 todoToggleComplete this = checkbox (this._completed)
     [("onChange", onChange)] [("className", "toggle")]
   where
-    onChange = mkHandler' (const $ pure ()) (const $ observe' $ Tagged @"TodoToggleComplete" ())
+    onChange = mkHandler' (const $ pure ()) (const $ noisyMutate $ this._completed %= not)
 
 todoDestroy :: (MonadWidget s m, MonadObserver' (Tagged "TodoDestroy" ()) m) => m ()
 todoDestroy = lf "button" [("onClick", onClick)]
@@ -80,16 +80,14 @@ todoLabel this = bh "label" [("onDoubleClick", onDoubleClick)] []
 
 todoInput ::
     ( MonadWidget s m
-    , MonadObserver' (Tagged "InputChange" ()) m
     , MonadObserver' (Tagged "TodoDestroy" ()) m
     )
     => Traversal' s Todo
     -> m ()
 todoInput this = input (this._value)
-    [("onBlur", onBlur), ("onKeyDown", onKeyDown), ("onChange", onChange)]
+    [("onBlur", onBlur), ("onKeyDown", onKeyDown)]
     [("className", "edit")]
   where
-    onChange = mkHandler' (const $ pure ()) (const $ observe' $ Tagged @"InputChange" ())
     onBlur = mkHandler' (const $ pure ()) (const $
         noisyMutate $ do
             this._editing .= NotEditing
@@ -123,7 +121,6 @@ todoInput this = input (this._value)
 
 todoView ::
     ( MonadWidget s m
-    , MonadObserver' (Tagged "TodoToggleComplete" ()) m
     , MonadObserver' (Tagged "TodoDestroy" ()) m
     , MonadObserver' (Tagged "TodoStartEdit" ()) m
     )
@@ -136,9 +133,7 @@ todoView this = do
 
 todo ::
     ( MonadWidget s m
-    , MonadObserver' (Tagged "TodoToggleComplete" ()) m
     , MonadObserver' (Tagged "TodoDestroy" ()) m
-    , MonadObserver' (Tagged "InputChange" ()) m
     )
     => Traversal' s Todo
     -> m ()
@@ -148,11 +143,11 @@ todo this = do
             [("completed", model $ this._completed)
             ,("editing", model $ this._editing.to (== Editing))])]
         $ do
-            (`runObserverT` hdlStartEdit) $ todoView this
+            (`runObserverT` onStartEdit) $ todoView this
             todoInput this
   where
     -- hdlStartEdit :: Tagged "TodoStartEdit" () -> m ()
-    hdlStartEdit (untag' @"TodoStartEdit" -> ()) = do
+    onStartEdit (untag' @"TodoStartEdit" -> ()) = do
         -- this will change the CSS style to make the label visible
         -- so we can't focus until label has been rendered
         noisyMutate $ this._editing .= Focusing

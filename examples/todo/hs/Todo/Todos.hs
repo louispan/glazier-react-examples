@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wno-type-defaults #-}
 
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ExtendedDefaultRules #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -8,12 +9,14 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ViewPatterns #-}
 
-module Todo.TodoList where
+module Todo.Todos where
 
 import Control.Monad.Extra
 import Data.Foldable
 import qualified Data.JSString as J
+import qualified Data.Map.Strict as M
 import qualified GHC.Generics as G
 import qualified Glazier.DOM as DOM
 import Glazier.React
@@ -24,17 +27,17 @@ default (JSString)
 data Filter = All | Active | Completed
     deriving (Eq, Show, Ord, G.Generic)
 
-data TodoList = TodoList
+data Todos = Todos
     { filterCriteria :: Filter
-    , todos :: [Obj Todo]
+    , todoMap :: M.Map ReactId (Obj Todo)
     } deriving (G.Generic)
 
-makeLenses_ ''TodoList
+makeLenses_ ''Todos
 
-footer :: MonadWidget s m => Traversal' s TodoList -> m ()
+footer :: MonadWidget s m => Traversal' s Todos -> m ()
 footer this = do
-    xs <- model $ this._todos
-    (completes, actives) <- partitionM isCompleted xs
+    xs <- model $ this._todoMap
+    (completes, actives) <- partitionM isCompleted (snd <$> M.toList xs)
     let completedCount = length completes
         activeCount = length actives
 
@@ -87,15 +90,15 @@ footer this = do
             _ -> All
     isCompleted obj = completed <$> (readObj obj)
     onClearCompletedClicked = mkHandler' (const $ pure ()) $ const $ do
-        xs <- model $ this._todos
-        actives <- filterM (fmap not . isCompleted) xs
-        noisyMutate $ this._todos .= actives
+        xs <- model $ this._todoMap
+        actives <- filterM (fmap not . isCompleted . snd) (M.toList xs)
+        noisyMutate $ this._todoMap .= M.fromList actives
 
-todoItems :: MonadWidget s m => Traversal' s TodoList -> m ()
+todoItems :: MonadWidget s m => Traversal' s Todos -> m ()
 todoItems this = do
-    xs <- model $ this._todos
+    xs <- model $ this._todoMap
     ftr <- model $ this._filterCriteria
-    ys <- filterM (isVisible ftr) xs
+    ys <- filterM (isVisible ftr) (snd <$> M.toList xs)
     traverse_ displayTodo ys
   where
     isVisible ftr obj = do
@@ -106,3 +109,13 @@ todoItems this = do
             (Completed, True) -> pure True
             _ -> pure False
     displayTodo obj = bh "ul" [] [] $ displayObj obj
+
+mkTodo :: MonadWidget s m => Traversal' s Todos -> ReactId -> JSString -> m ()
+mkTodo this k v = do
+    onTodoDestroy' <- codify onTodoDestroy
+    let todo' = (`runObserverT` (instruct . onTodoDestroy')) $ todo id
+    obj <- mkObj todo' "todo" $ Todo v False NotEditing
+    noisyMutate $ this._todoMap %= M.insert k obj
+  where
+    onTodoDestroy (untag' @"TodoDestroy" -> ()) =
+        noisyMutate $ this._todoMap %= M.delete k
