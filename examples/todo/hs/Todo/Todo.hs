@@ -27,9 +27,9 @@ module Todo.Todo where
 import qualified Data.JSString as J
 import Data.Tagged.Extras
 import qualified GHC.Generics as G
-import qualified Glazier.DOM as DOM
 import Glazier.React
 import Glazier.React.Widgets.Input
+import qualified JS.DOM as DOM
 
 default (JSString)
 
@@ -94,10 +94,11 @@ todoInput this = input (this._value)
             this._value %= J.strip)
 
     onKeyDown = mkHandler' fromKeyDown hdlKeyDown
-    fromKeyDown evt = guardJustM $ pure $ (\t' e' -> (t', DOM.key e')) <$> t <*> e
+    fromKeyDown evt = do
+        t <- viaJS @DOM.HTMLElement <$> DOM.target evt
+        guardJustM $ pure $ (\t' e' -> (t', DOM.key e')) <$> t <*> e
       where
-        e = viaJS @DOM.SyntheticKeyboardEvent evt
-        t = viaJS @DOM.HTMLElement $ DOM.target evt
+        e = viaJS @SyntheticKeyboardEvent evt
     hdlKeyDown (t, k) = case k of
             -- NB. Enter and Escape doesn't generate a onChange event
             -- So there is no adverse interation with input onChange

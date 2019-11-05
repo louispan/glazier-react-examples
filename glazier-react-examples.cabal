@@ -39,7 +39,7 @@ executable todo
                       , glazier >= 2
                       , glazier-react >= 2
                       , glazier-react-widget >= 2
-                      , javascript-extras >= 0.6
+                      , javascript-extras >= 1.0
                       , lens >= 4
                       , lens-misc >= 0
                       , mtl >= 2

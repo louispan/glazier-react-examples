@@ -18,8 +18,8 @@ import Data.Foldable
 import qualified Data.JSString as J
 import qualified Data.Map.Strict as M
 import qualified GHC.Generics as G
-import qualified Glazier.DOM as DOM
 import Glazier.React
+import qualified JS.DOM as DOM
 import Todo.Todo
 
 default (JSString)
@@ -77,10 +77,11 @@ footer this = do
            else pure ()
   where
     onMount = mkHandler (const $ pure ()) $ const $ do
-        w <- guardJustM $ pure DOM.globalWindow
+        w <- guardJustIO $ fromJS @DOM.Window <$> globalThis `getProperty` "window"
         listenEventTarget w "hashchange" fromHashChange hdlHashChange
     fromHashChange j = do
-        newURL <- guardJustIO $ fromJS <$> getProperty j "newURL"
+        o <- guardJust $ fromJS @JSObject j
+        newURL <- guardJustIO $ fromJS <$> getProperty o "newURL"
         let (_, newHash) = J.breakOn "#" newURL
         pure newHash
     hdlHashChange newHash = do

@@ -18,9 +18,9 @@ import Data.Foldable
 import qualified Data.JSString as J
 import qualified Data.Map.Strict as M
 import qualified GHC.Generics as G
-import qualified Glazier.DOM as DOM
 import Glazier.React
 import Glazier.React.Widgets.Input
+import qualified JS.DOM as DOM
 import Todo.Todo
 import Todo.Todos
 
@@ -58,22 +58,23 @@ todoNewInput this = input (this._newTodo)
   where
     onKeyDown = mkHandler' fromKeyDown (observe' . Tagged @"NewTodo")
     -- Manipulate the DOM input directly to avoid race conditions with lazy GHCJS
-    fromKeyDown :: DOM.SyntheticEvent -> MaybeT IO JSString
-    fromKeyDown evt = case DOM.key <$> e of
-        Just "Enter" -> do
-            v <- guardJustIO $ fromJS <$> getProperty t "value"
-            t `setProperty` ("value", "")
-            let v' = J.strip v
-            if J.null v'
-                then empty
-                else pure v'
-        Just "Escape" -> do
-            t `setProperty` ("value", "")
-            empty
-        _ -> empty
+    fromKeyDown :: SyntheticEvent -> MaybeT IO JSString
+    fromKeyDown evt = do
+        t <- DOM.target evt
+        case DOM.key <$> e of
+            Just "Enter" -> do
+                v <- guardJustIO $ fromJS <$> getProperty t "value"
+                t `setProperty` ("value", "")
+                let v' = J.strip v
+                if J.null v'
+                    then empty
+                    else pure v'
+            Just "Escape" -> do
+                t `setProperty` ("value", "")
+                empty
+            _ -> empty
       where
-        t = DOM.target evt
-        e = viaJS @DOM.SyntheticKeyboardEvent evt
+        e = viaJS @SyntheticKeyboardEvent evt
 
     onMount = mkHandler pure hdlMount
     hdlMount j = do
@@ -88,7 +89,9 @@ toggleCompleteAll this = lf "input" [("onChange", onChange)]
     ]
   where
     onChange = mkHandler' fromChange handleChange
-    fromChange = guardJustIO . fmap fromJS . (`getProperty` "checked") . DOM.target
+    fromChange j = do
+        t <- DOM.target j
+        guardJustIO . fmap fromJS . (`getProperty` "checked") $ t
     handleChange checked = do
         xs <- model (this._todos._todoMap)
         traverse_ (`shall` setComplete checked) xs
