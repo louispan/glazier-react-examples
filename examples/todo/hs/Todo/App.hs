@@ -60,7 +60,7 @@ todoNewInput this = input (this._newTodo)
     -- Manipulate the DOM input directly to avoid race conditions with lazy GHCJS
     fromKeyDown :: SyntheticEvent -> MaybeT IO JSString
     fromKeyDown evt = do
-        t <- DOM.target evt
+        t <- guardJustIO $ DOM.target evt
         case DOM.key <$> e of
             Just "Enter" -> do
                 v <- guardJustIO $ fromJS <$> getProperty t "value"
@@ -90,7 +90,7 @@ toggleCompleteAll this = lf "input" [("onChange", onChange)]
   where
     onChange = mkHandler' fromChange handleChange
     fromChange j = do
-        t <- DOM.target j
+        t <- guardJustIO $ DOM.target j
         guardJustIO . fmap fromJS . (`getProperty` "checked") $ t
     handleChange checked = do
         xs <- model (this._todos._todoMap)
