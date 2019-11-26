@@ -125,3 +125,15 @@ app this = do
         k <- mkReactId
         mkTodo (this._todos) k v
 
+
+
+app2 :: (MonadWidget s m) => m ()
+app2 = do
+    (txt "hello world")
+    (txt "goodbye")
+    -- bh "div" [] [] $
+    --     bh "section" [] [] $ do
+    --         bh "header" [] [] $
+    --             (txt "todos")
+
+

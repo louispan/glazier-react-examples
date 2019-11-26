@@ -1,9 +1,12 @@
 // import React from 'react';
 // import ReactDOM from 'react-dom';
-import 'src/index.css';
+import './index.css';
+import '../node_modules/todomvc-common/base.css';
+import '../node_modules/todomvc-app-css/index.css';
 // import App from './App';
 // import * as serviceWorker from './serviceWorker';
-import hsMain from '.shake/hsMain.js';
+
+import hsMain from '../.shake/hsMain.js';
 
 // This has the side effect of running the haskell main
 hsMain();

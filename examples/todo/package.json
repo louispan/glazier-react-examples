@@ -1,12 +1,11 @@
 {
-  "name": "todo",
+  "name": "glazier-react-todo",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
     "glazier-react": "louispan/glazier-react",
-    "react": "^16.10.2",
     "react-dom": "^16.10.2",
-    "react-scripts": "3.2.0",
+    "react": "^16.10.1",
     "todomvc-app-css": "^2.3.0",
     "todomvc-common": "^1.0.5"
   },
@@ -14,24 +13,17 @@
     "./src/index.js"
   ],
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "start": "webpack-dev-server --display-error-details --progress --colors --open --config webpack.dev.js",
+    "build": "webpack --display-error-details --progress --colors --config webpack.prod.js"
   },
-  "eslintConfig": {
-    "extends": "react-app"
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+  "devDependencies": {
+    "css-loader": "^3.2.0",
+    "html-webpack-plugin": "^3.2.0",
+    "path": "^0.12.7",
+    "style-loader": "^1.0.0",
+    "webpack": "^4.41.0",
+    "webpack-cli": "^3.3.9",
+    "webpack-dev-server": "^3.8.1",
+    "webpack-merge": "^4.2.2"
   }
 }

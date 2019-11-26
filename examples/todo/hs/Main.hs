@@ -26,6 +26,7 @@ main = (`evalMaybeT` ()) $ do
         (LogConfig (Just DEBUG) Nothing mempty)
         (1000000 `div` 60)
         root
-        (app id)
+        -- (app id)
+        app2
         "app"
         (App "" (Todos All mempty))
