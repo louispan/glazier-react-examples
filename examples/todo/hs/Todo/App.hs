@@ -127,13 +127,19 @@ app this = do
 
 
 
-app2 :: (MonadWidget s m) => m ()
-app2 = do
-    (txt "hello world")
-    (txt "goodbye")
-    -- bh "div" [] [] $
-    --     bh "section" [] [] $ do
-    --         bh "header" [] [] $
-    --             (txt "todos")
-
+-- app2 :: (MonadWidget s m) => m ()
+-- app2 = do
+--     lf "div" [] [("className", "dude")]
+--     (txt "hello world")
+--     (txt "goodbye")
+--     bh "div" [] [] $
+--         bh "section" [] [] $ do
+--             bh "header" [] [] $ do
+--                 delegate $ \fire -> do
+--                     (txt "todos")
+--                     (txt "hello world")
+--                     fire ()
+--                     fire ()
+--             bh "h1" [] [] $
+--                 (txt "abc")
 
