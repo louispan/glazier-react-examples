@@ -64,14 +64,14 @@ todoToggleComplete this = checkbox (this._completed)
   where
     onChange = mkHandler' (const $ pure ()) (const $ noisyMutate $ this._completed %= not)
 
-todoDestroy :: (MonadWidget s m, MonadObserver' (Tagged "TodoDestroy" ()) m) => m ()
+todoDestroy :: (MonadWidget s m, Observer' (Tagged "TodoDestroy" ()) m) => m ()
 todoDestroy = lf "button" [("onClick", onClick)]
     [("key", "destroy"),("className", "destroy")]
   where
     onClick = mkHandler' (const $ pure ()) $
         const $ observe' $ Tagged @"TodoDestroy" ()
 
-todoLabel :: (MonadWidget s m, MonadObserver' (Tagged "TodoStartEdit" ()) m)
+todoLabel :: (MonadWidget s m, Observer' (Tagged "TodoStartEdit" ()) m)
     => Traversal' s Todo -> m ()
 todoLabel this = bh "label" [("onDoubleClick", onDoubleClick)] []
     (txt (model $ this._value))
@@ -80,7 +80,7 @@ todoLabel this = bh "label" [("onDoubleClick", onDoubleClick)] []
 
 todoInput ::
     ( MonadWidget s m
-    , MonadObserver' (Tagged "TodoDestroy" ()) m
+    , Observer' (Tagged "TodoDestroy" ()) m
     )
     => Traversal' s Todo
     -> m ()
@@ -122,8 +122,8 @@ todoInput this = input (this._value)
 
 todoView ::
     ( MonadWidget s m
-    , MonadObserver' (Tagged "TodoDestroy" ()) m
-    , MonadObserver' (Tagged "TodoStartEdit" ()) m
+    , Observer' (Tagged "TodoDestroy" ()) m
+    , Observer' (Tagged "TodoStartEdit" ()) m
     )
     => Traversal' s Todo
     -> m ()
@@ -134,7 +134,7 @@ todoView this = do
 
 todo ::
     ( MonadWidget s m
-    , MonadObserver' (Tagged "TodoDestroy" ()) m
+    , Observer' (Tagged "TodoDestroy" ()) m
     )
     => Traversal' s Todo
     -> m ()

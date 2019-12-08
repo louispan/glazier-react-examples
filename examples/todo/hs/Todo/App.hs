@@ -50,7 +50,7 @@ makeLenses_ ''App
 --             let xs' = W.DynamicCollection filterCriteria sortCriteria [] xs
 --             lift $ evalBenignIO $ execStateT (W.updateVisibleList todoFilterer todoSorter) xs'
 
-todoNewInput :: (MonadWidget s m, MonadObserver' (Tagged "NewTodo" JSString) m)
+todoNewInput :: (MonadWidget s m, Observer' (Tagged "NewTodo" JSString) m)
     => Traversal' s App -> m ()
 todoNewInput this = input (this._newTodo)
     [("onKeyDown", onKeyDown), ("onMount", onMount)]
@@ -112,7 +112,6 @@ app this = do
             bh "header" [] [("className", "header")] $ do
                 bh "h1" [] [] (txt "todos")
                 todoNewInput this
-
             whenM (model $ this._todos._todoMap.to null.to not) $ do
                 bh "section" [] [("className", "main")] $ do
                     toggleCompleteAll this
