@@ -76,7 +76,8 @@ todoLabel :: (MonadWidget s m, Observer' (Tagged "TodoStartEdit" ()) m)
 todoLabel this = bh "label" [("onDoubleClick", onDoubleClick)] []
     (txt (model $ this._value))
   where
-    onDoubleClick = mkHandler' (const $ pure ()) $ const $ observe' $ Tagged @"TodoStartEdit" ()
+    onDoubleClick = mkHandler' (const $ pure ()) $ const $
+        observe' $ Tagged @"TodoStartEdit" ()
 
 todoInput ::
     ( MonadWidget s m
@@ -85,7 +86,7 @@ todoInput ::
     => Traversal' s Todo
     -> m ()
 todoInput this = input (this._value)
-    [("onBlur", onBlur), ("onKeyDown", onKeyDown)]
+    [("onBlur", onBlur), ("onKeyDown", onKeyDown), ("ref", onRef)]
     [("className", "edit")]
   where
     onBlur = mkHandler' (const $ pure ()) (const $
@@ -93,6 +94,7 @@ todoInput this = input (this._value)
             this._editing .= NotEditing
             this._value %= J.strip)
 
+    onRef = mkHandler pure (setScratch "edit")
     onKeyDown = mkHandler' fromKeyDown hdlKeyDown
     fromKeyDown evt = do
         t <- viaJS @DOM.HTMLElement <$> DOM.target evt
@@ -128,9 +130,10 @@ todoView ::
     => Traversal' s Todo
     -> m ()
 todoView this = do
-    bh "div" [] [("className", "view")] $ todoToggleComplete this
-    todoLabel this
-    todoDestroy
+    bh "div" [] [("className", "view")] $ do
+        todoToggleComplete this
+        todoLabel this
+        todoDestroy
 
 todo ::
     ( MonadWidget s m
@@ -142,22 +145,24 @@ todo this = do
     bh "li" [("onRendered", onRendered)]
         [("className", classNames
             [("completed", model $ this._completed)
-            ,("editing", model $ this._editing.to (== Editing))])]
+            ,("editing", model $ this._editing.to (\a -> a == Editing || a == Focusing))])]
         $ do
             (`runObserverT` onStartEdit) $ todoView this
             todoInput this
   where
     -- hdlStartEdit :: Tagged "TodoStartEdit" () -> m ()
-    onStartEdit (untag' @"TodoStartEdit" -> ()) = do
+    onStartEdit (untag' @"TodoStartEdit" -> ()) =
         -- this will change the CSS style to make the label visible
         -- so we can't focus until label has been rendered
         noisyMutate $ this._editing .= Focusing
-    onRendered = mkHandler pure hdlRendered
-    hdlRendered j = do
+
+    onRendered = mkHandler pure (const hdlRendered)
+    hdlRendered = do
         e <- model $ this._editing
         case e of
             Focusing -> do
                 quietMutate $ this._editing .= Editing
+                j <- getScratch "edit"
                 t <- guardJust $ fromJS @DOM.HTMLElement j
                 DOM.focus t
                 v <- guardJustM $ fromJS @JSString <$> t `getProperty` "value"

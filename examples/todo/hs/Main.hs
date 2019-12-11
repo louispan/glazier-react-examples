@@ -27,6 +27,5 @@ main = (`evalMaybeT` ()) $ do
         (1000000 `div` 60)
         root
         (app id)
-        -- (app2)
         "app"
         (App "" (Todos All mempty))

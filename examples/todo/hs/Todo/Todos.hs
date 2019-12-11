@@ -100,7 +100,7 @@ todoItems this = do
     xs <- model $ this._todoMap
     ftr <- model $ this._filterCriteria
     ys <- filterM (isVisible ftr) (snd <$> M.toList xs)
-    traverse_ displayTodo ys
+    traverse_ displayObj ys
   where
     isVisible ftr obj = do
         completed' <- completed <$> readObj obj
@@ -109,7 +109,6 @@ todoItems this = do
             (Active, False) -> pure True
             (Completed, True) -> pure True
             _ -> pure False
-    displayTodo obj = bh "ul" [] [] $ displayObj obj
 
 mkTodo :: MonadWidget s m => Traversal' s Todos -> ReactId -> JSString -> m ()
 mkTodo this k v = do

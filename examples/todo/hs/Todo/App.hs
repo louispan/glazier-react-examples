@@ -34,7 +34,7 @@ data App = App
 makeLenses_ ''App
 
 -- instance MonadIO m => A.AToJSON (Benign m) App
--- instance (Applicative m, AsJavascript c, AsHTMLElement c, MonadReactant c m) => A.AFromJSON (ExceptT (Which '[TD.OnTodoToggleComplete (ReactId, UKey), TD.OnTodoDestroy (ReactId, UKey), OnTodoMutated (ReactId, UKey)]) m) App where
+-- instance (Applicative m, AsJavascript c, AsHTMLElement c,q MonadReactant c m) => A.AFromJSON (ExceptT (Which '[TD.OnTodoToggleComplete (ReactId, UKey), TD.OnTodoDestroy (ReactId, UKey), OnTodoMutated (ReactId, UKey)]) m) App where
 --     aparseJSON = A.withObject "App" $ \v -> fmap initialize (aparse' v)
 --       where
 --         aparse' v = getCompose $ (,)
@@ -123,22 +123,4 @@ app this = do
     onNewTodo (untag' @"NewTodo" @JSString -> v) = do
         k <- mkReactId
         mkTodo (this._todos) k v
-
-
-
--- app2 :: (MonadWidget s m) => m ()
--- app2 = do
---     lf "div" [] [("className", "dude")]
---     (txt "hello world")
---     (txt "goodbye")
---     bh "div" [] [] $
---         bh "section" [] [] $ do
---             bh "header" [] [] $ do
---                 delegate $ \fire -> do
---                     (txt "todos")
---                     (txt "hello world")
---                     fire ()
---                     fire ()
---             bh "h1" [] [] $
---                 (txt "abc")
 
